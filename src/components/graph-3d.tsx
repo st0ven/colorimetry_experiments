@@ -3,6 +3,11 @@ import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import { renderLabel } from "../helper/babylon-render";
 
+// render base axial guidelines
+const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
+const axisMarkerVectorY: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
+const axisMarkerVectorZ: Babylon.Vector3 = new Babylon.Vector3(1, 0, 0);
+
 enum Axis {
   X,
   Y,
@@ -18,57 +23,6 @@ interface AxisBaseRenderOptions {
 }
 interface AxisRenderOptions extends AxisBaseRenderOptions {
   markerVector: Babylon.Vector3;
-}
-
-// render base axial guidelines
-const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorY: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorZ: Babylon.Vector3 = new Babylon.Vector3(1, 0, 0);
-
-/*
-  Draw axis marks for a main axis which conveys repeating grid marks
-  along that axis. Returns an array of vectors which represent line
-  segments to be drawn by Babylon.
-  ---
-  REQUIRES:
-    -Babylon.js
-*/
-function createAxisGuidelines(
-  numOfLines: number
-): Array<Array<Babylon.Vector3>> {
-  const pointCollection: Array<Array<Babylon.Vector3>> = [];
-  for (var z = 0; z < numOfLines + 2; z++) {
-    const Z = z / (numOfLines + 1);
-    for (var y = 0; y < numOfLines + 2; y++) {
-      const Y = y / (numOfLines + 1);
-      pointCollection.push([
-        new Babylon.Vector3(0, Y, Z),
-        new Babylon.Vector3(1, Y, Z),
-      ]);
-    }
-  }
-  return pointCollection;
-}
-
-//
-function createVolumetricGuidelines(
-  vectors: Array<Array<Babylon.Vector3>>,
-  scene: Babylon.Scene
-) {
-  const axisGuidelinesX = Babylon.MeshBuilder.CreateLineSystem(
-    "axisMarksX",
-    { lines: vectors },
-    scene
-  );
-  axisGuidelinesX.alpha = 0.2;
-  // create instance and transform into position for Y axis
-  const axisGuidelinesY = axisGuidelinesX.createInstance("axisMarksY");
-  axisGuidelinesY.rotate(new Babylon.Vector3(-1, -1, 0), Math.PI);
-  axisGuidelinesY.translate(Babylon.Axis.Z, -1, Babylon.Space.LOCAL);
-  // do so similarly for Z axis
-  const axisGuidelinesZ = axisGuidelinesX.createInstance("axisMarksZ");
-  axisGuidelinesZ.rotate(Babylon.Axis.Y, Math.PI / 2);
-  axisGuidelinesZ.translate(Babylon.Axis.X, -1, Babylon.Space.LOCAL);
 }
 
 // function which will render axis normals, markers and labels related
@@ -118,7 +72,7 @@ function renderAxis(
 
       // create marker line instance and have it render into scene
       const marker: Babylon.LinesMesh = Babylon.MeshBuilder.CreateLines(
-        `${Axis[axis]}-axis-tick=${index}`,
+        `${Axis[axis]}-axis-tick-${index}`,
         { points: [vector, normalPoint] },
         scene
       );
@@ -143,18 +97,20 @@ function renderAxis(
 
   // render axis label
   renderLabel(
-    axis === Axis.X ? "R" : axis === Axis.Y ? "G" : "B",
+    //axis === Axis.X ? "R" : axis === Axis.Y ? "G" : "B",
+    Axis[axis],
     new Babylon.Vector3(
       axis === Axis.X ? max * 1.05 : 0,
       axis === Axis.Y ? max * 1.05 : 0,
       axis === Axis.Z ? max * 1.05 : 0
     ),
     {
-      color: axis === Axis.X ? "red" : axis === Axis.Y ? "green" : "blue",
+      //color: axis === Axis.X ? "red" : axis === Axis.Y ? "green" : "blue",
+      color: "white",
       fontSize: 180,
       fontWeight: "bold",
-      labelWidth: 0.06,
-      labelHeight: 0.06,
+      labelWidth: 0.08,
+      labelHeight: 0.08,
       textureWidth: 320,
       textureHeight: 320,
     },
@@ -192,6 +148,7 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
 
         sceneRef.current = new Babylon.Scene(engineRef.current);
         sceneRef.current.shadowsEnabled = false;
+        sceneRef.current.clearColor = new Babylon.Color4(0.06,0.04,0.14,1);
 
         cameraRef.current = new Babylon.ArcRotateCamera(
           "camera",
@@ -230,12 +187,10 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
         renderAxis(Axis.Y, axisOptionsY, sceneRef.current);
         renderAxis(Axis.Z, axisOptionsZ, sceneRef.current);
 
-        // gather guide vectors and create volume guides
-        /*const guidelineVectors: Array<Array<
-          Babylon.Vector3
-        >> = createAxisGuidelines(2);
-        createVolumetricGuidelines(guidelineVectors, sceneRef.current);
-        */
+        // render loop to allow interactivity
+        engineRef.current.runRenderLoop(() => {
+          sceneRef.current?.render(true);
+        });
       }
     },
     [canvasRef, cameraRef, engineRef, sceneRef]
@@ -251,25 +206,22 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
         meshes.length
       ) {
         // this should be extracted from this component scope altogether
-        meshes?.forEach((mesh: any, index: number) => {
-          if (mesh && sceneRef.current) {
-            mesh(sceneRef.current);
+        meshes?.forEach((meshRenderFunction: any, index: number) => {
+          if (meshRenderFunction && sceneRef.current) {
+            meshRenderFunction(sceneRef.current);
           }
         });
 
-        lights?.forEach((light: (scene: Babylon.Scene) => void) => {
-          if (light && sceneRef.current) {
-            light(sceneRef.current);
+        lights?.forEach(
+          (lightRenderFunction: (scene: Babylon.Scene) => void) => {
+            if (lightRenderFunction && sceneRef.current) {
+              lightRenderFunction(sceneRef.current);
+            }
           }
-        });
+        );
 
         // attach camera controls to the canvas
         cameraRef.current.attachControl(canvasRef.current, true);
-
-        // render loop to allow interactivity
-        engineRef.current.runRenderLoop(() => {
-          sceneRef.current?.render();
-        });
       }
     },
     [lights, meshes, sceneRef, engineRef, cameraRef, canvasRef]
