@@ -1,22 +1,6 @@
 import * as Babylon from "babylonjs";
-import {
-  ColorSpace,
-  compand_RGB_XYZ_Space,
-  expandCMFValues,
-  profiles,
-  convert_XYZ_to_xyY,
-} from "./color-profile-conversion";
-
-// defines primary color points for red, green, blue, yellow, cyan, magenta
-// as represented in scale from 0 - 1.
-const XYZ_primaries: number[][] = [
-  [1, 0, 0], // red
-  [1, 1, 0], // orange
-  [0, 1, 0], // green
-  [0, 1, 1], // magenta
-  [0, 0, 1], // blue
-  [1, 0, 1], // cyan
-];
+import { compand_RGB_XYZ_Space } from "./color-profile-conversion";
+import { ColorSpace, colorSpace, XYZ_primaries } from "./color-space";
 
 // itereate through scene meshes and return the mesh instance that matches
 // the provided name, or undefined if none are found
@@ -44,11 +28,11 @@ Render color profile planes projected into xyY space
 */
 export function renderProfileChromaticityPlane(
   name: string,
-  colorSpace: ColorSpace,
+  colorSpaceName: ColorSpace,
   scene: Babylon.Scene
 ) {
   if (scene) {
-    const { convertToReferenceSpace, primaries } = profiles[colorSpace];
+    const { convertToReferenceSpace, primaries } = colorSpace[colorSpaceName];
 
     // used to define facet triangles to manually render primary points as a polygon
     const facetIndices: number[] = [2, 1, 0]; //[0, 5, 2];
@@ -56,7 +40,7 @@ export function renderProfileChromaticityPlane(
     // get vector positions array in xyY space for all primaries, given a
     // particular color profile array of xyY primaries and xyY whitepoint
     const positions: Array<number> = primaries
-      .map(([x, y]: number[]) => [x-0.01, y-0.01, 1 - x - y-0.01])
+      .map(([x, y]: number[]) => [x - 0.01, y - 0.01, 1 - x - y - 0.01])
       .flat();
 
     // gathers an array of numbers representing a 4 number pair representing
@@ -67,7 +51,7 @@ export function renderProfileChromaticityPlane(
       XYZ_primaries[4],
     ]
       .map((primary: number[]) =>
-        convertToReferenceSpace(primary, colorSpace).concat([1])
+        convertToReferenceSpace(primary, colorSpaceName).concat([1])
       )
       .flat();
 
@@ -220,10 +204,10 @@ Render profile color space in XYZ space
 */
 export function renderColorSpace(
   name: string,
-  colorSpace: ColorSpace,
+  colorSpaceName: ColorSpace,
   scene: Babylon.Scene
 ) {
-  const { convertToReferenceSpace } = profiles[colorSpace];
+  const { convertToReferenceSpace } = colorSpace[colorSpaceName];
 
   // include black & white points with the 6 primaries
   const XYZ_positions: number[][] = [[0, 0, 0], ...XYZ_primaries, [1, 1, 1]];
@@ -231,13 +215,13 @@ export function renderColorSpace(
   // positions are calculated by mapping primary points + whitepoint & blackpoint
   // as they are companded from their source color space into reference space
   const positions: number[] = XYZ_positions.map((color: number[]) =>
-    compand_RGB_XYZ_Space(color, colorSpace)
+    compand_RGB_XYZ_Space(color, colorSpaceName)
   ).flat();
 
   // colors must also compand values from source space to reference space but also
   // should apply gamma correction relevant to the profile for accurate color representation
   const colors: number[] = XYZ_positions.map((color: number[]) =>
-    convertToReferenceSpace(color, colorSpace).concat([1])
+    convertToReferenceSpace(color, colorSpaceName).concat([1])
   ).flat();
 
   // define babylon VertexData to be applied to the 3d box mesh

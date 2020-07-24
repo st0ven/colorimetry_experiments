@@ -1,7 +1,7 @@
 import React, { useState, useCallback, ChangeEvent, useMemo } from "react";
 import styles from "./App.module.scss";
 import { Graph3d } from "./components/graph-3d";
-import { ColorSpace, profiles } from "./helper/color-profile-conversion";
+import { ColorSpace, colorSpace } from "./helper/color-space";
 import {
   renderColorSpace,
   renderProfileChromaticityPlane,
@@ -9,13 +9,17 @@ import {
 } from "./helper/babylon-render";
 import * as Babylon from "babylonjs";
 
+// import CMF data CIE 1931 at 2 degrees - 0.1nm
 const XYZ_data = require("./data/cmf_1931_XYZ_0.1nm.csv");
+
+// dictionary of mesh names
 export const meshNames: any = {
   locus: "spectral_locus",
   chromaticPlane: "chromaticity_plane",
   colorSpace: "color_space",
 };
 
+// render hemisphere light to 3d graphs
 function renderHemiLight(scene: Babylon.Scene) {
   // lighting instantitation
   const light: Babylon.HemisphericLight = new Babylon.HemisphericLight(
@@ -28,70 +32,50 @@ function renderHemiLight(scene: Babylon.Scene) {
   light.specular = new Babylon.Color3(0, 0, 0);
 }
 
-function renderChromaticityPlaneWithSpace(
-  colorSpace: ColorSpace,
-  scene: Babylon.Scene
-) {
-  renderProfileChromaticityPlane(meshNames.chromaticPlane, colorSpace, scene);
-}
+// create an object and map ColorSpace keys which invoke rendering function
+// to plot the chormatic plane corresponding to the colorspace name
+const renderChromaticityPlane: any = {};
+Object.keys(ColorSpace).map((colorSpaceName: string) => {
+  renderChromaticityPlane[colorSpaceName] = (scene: Babylon.Scene) => {
+    renderProfileChromaticityPlane(
+      meshNames.chromaticPlane,
+      Object(ColorSpace)[colorSpaceName],
+      scene
+    );
+  };
+});
 
-const renderChromaticityPlane: any = {
-  sRGB(scene: Babylon.Scene) {
-    renderChromaticityPlaneWithSpace(ColorSpace.sRGB, scene);
-  },
+// create an object and map ColorSpace keys which invoke rendering function
+// to plot the color space as a polygon plotted within XYZ space
+const renderColorSpaceMesh: any = {};
+Object.keys(ColorSpace).map(
+  (colorSpaceName: string) =>
+    (renderColorSpaceMesh[colorSpaceName] = (scene: Babylon.Scene) => {
+      renderColorSpace(
+        meshNames.colorSpace,
+        Object(ColorSpace)[colorSpaceName],
+        scene
+      );
+    })
+);
 
-  adobeRGB(scene: Babylon.Scene) {
-    renderChromaticityPlaneWithSpace(ColorSpace.adobeRGB, scene);
-  },
-
-  appleRGB(scene: Babylon.Scene) {
-    //renderChromaticityPlaneWithSpace(ColorSpace.appleRGB, scene);
-  },
-
-  adobeWideGamut(scene: Babylon.Scene) {
-    renderChromaticityPlaneWithSpace(ColorSpace.adobeWideGamut, scene);
-  },
-
-  displayP3(scene: Babylon.Scene) {
-    renderChromaticityPlaneWithSpace(ColorSpace.displayP3, scene);
-  },
-
-  proPhoto(scene:Babylon.Scene){
-    renderChromaticityPlaneWithSpace(ColorSpace.proPhoto, scene);
-  }
-};
-
-const renderColorSpaceMesh: any = {
-  sRGB(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.sRGB, scene);
-  },
-  adobeRGB(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.adobeRGB, scene);
-  },
-  appleRGB(scene: Babylon.Scene) {
-    //renderColorSpace(meshNames.colorSpace, ColorSpace.appleRGB, scene);
-  },
-  adobeWideGamut(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.adobeWideGamut, scene);
-  },
-  displayP3(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.displayP3, scene);
-  },
-  proPhoto(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.proPhoto, scene);
-  },
-};
-
+// function to render the spectral locus with a baked in arguments
 function render_spectral_locus(scene: Babylon.Scene) {
   renderSpectralLocusXYZ(meshNames.locus, XYZ_data, scene);
 }
 
+// Main application component
 function App() {
+  // hold state for the selected color spaces across our demo 3d graphs
   const [spectralMeshName, setSpectralMeshName] = useState<string>(
     ColorSpace.sRGB
   );
-  const [colorSpace, setColorSpace] = useState<string>(ColorSpace.sRGB);
+  const [colorSpaceName, setcolorSpaceName] = useState<string>(
+    ColorSpace.sRGB
+  );
 
+  // callbacks which control the stateful values which hold reference to the current
+  // color space selected via dropdown
   const changeProfileForChromaticity = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
@@ -102,19 +86,22 @@ function App() {
   const changeProfileForColorSpace = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
-      setColorSpace(value);
+      setcolorSpaceName(value);
     },
     []
   );
 
+  // populate a list of color space options within an <Option> tag as mapped
+  // against the keys of the ColorSpace enum
   const colorSpaceOptions = useMemo((): React.ReactNode => {
-    return Object.keys(ColorSpace).map((colorSpace: string) => (
-      <option key={`option-${colorSpace}`} value={colorSpace}>
-        {profiles[colorSpace].label}
+    return Object.keys(ColorSpace).map((colorSpaceName: string) => (
+      <option key={`option-${colorSpaceName}`} value={colorSpaceName}>
+        {colorSpace[colorSpaceName].label}
       </option>
     ));
   }, []);
 
+  // render output
   return (
     <div className={styles.app}>
       <section className={styles.chromaticitySection}>
@@ -146,7 +133,7 @@ function App() {
         </select>
         <Graph3d
           lights={[renderHemiLight]}
-          meshes={[renderColorSpaceMesh[colorSpace]]}
+          meshes={[renderColorSpaceMesh[colorSpaceName]]}
         ></Graph3d>
       </section>
     </div>
