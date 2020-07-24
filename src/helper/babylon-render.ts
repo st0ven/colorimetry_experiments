@@ -1,9 +1,10 @@
 import * as Babylon from "babylonjs";
 import {
   ColorSpace,
-  gammaCorrect_linearRGB_to_sRGB,
-  transfer_gammaRGB_to_linearRGB,
+  compand_RGB_XYZ_Space,
+  expandCMFValues,
   profiles,
+  convert_XYZ_to_xyY,
 } from "./color-profile-conversion";
 
 // defines primary color points for red, green, blue, yellow, cyan, magenta
@@ -33,7 +34,7 @@ export function findMeshByName(
 
 // takes a coordinate in RGB refernce space and projects onto a
 // 3d plane for easier visualization of the chromaticity plot
-function project_XYZ_to_3D_plane([X, Y, Z]: number[]): number[] {
+function normalize_XYZ([X, Y, Z]: number[]): number[] {
   const sum: number = X + Y + Z;
   return [X / sum, Y / sum, Z / sum];
 }
@@ -55,7 +56,7 @@ export function renderProfileChromaticityPlane(
     // get vector positions array in xyY space for all primaries, given a
     // particular color profile array of xyY primaries and xyY whitepoint
     const positions: Array<number> = primaries
-      .map(([x, y]: number[]) => [x, y, 1 - x - y])
+      .map(([x, y]: number[]) => [x-0.01, y-0.01, 1 - x - y-0.01])
       .flat();
 
     // gathers an array of numbers representing a 4 number pair representing
@@ -65,11 +66,6 @@ export function renderProfileChromaticityPlane(
       XYZ_primaries[2],
       XYZ_primaries[4],
     ]
-      .map((primary: number[]) =>
-        gammaCorrect_linearRGB_to_sRGB(primary, colorSpace)
-      )
-      // convert XYZ primaries to gamma corrected values reflecting proper
-      // color space value and flatten all results.
       .map((primary: number[]) =>
         convertToReferenceSpace(primary, colorSpace).concat([1])
       )
@@ -130,17 +126,26 @@ export function renderSpectralLocusXYZ(
   // The spectral locus is a static element and only needs to be rendered once.
   // Only proceed to render if an instance cannot be found in the scene.
   if (!findMeshByName(name, scene)) {
+    const spectralMin: number = 390;
+    const spectralMax: number = 700;
+    const wavelengthDelta: number = 0.1;
+
     // mutate the rawSpectral data to extract an array of Babylon.Vector3
     // objects representing the coordinates at each wavelength in the LUT.
     const spectralPoints_xyY: Babylon.Vector3[] = rawSpectralData
+      // clip data to spectral range
+      .slice(0, (spectralMax - spectralMin) * (1 / wavelengthDelta) + 1)
       // extract wavelength info and coerce into numeric form
-      .map((datum: Array<string>) =>
-        datum.slice(1).map((point: string) => Number(point))
-      )
-      // normalize to a 3d plane as a vector3 array
-      .map((datum: Array<number>) => {
-        return new Babylon.Vector3(...project_XYZ_to_3D_plane(datum));
-      });
+      .map(
+        (datum: Array<string>) =>
+          // normalize to a 3d plane as a vector3 array
+          new Babylon.Vector3(
+            ...normalize_XYZ(
+              // extract wavelength info and coerce into numeric form
+              datum.slice(1).map((point: string) => Number(point))
+            )
+          )
+      );
 
     // create a Babylon.Path3D object out of the extracted vector arary
     const XYZ_locus_curve: Babylon.Path3D = new Babylon.Path3D(
@@ -152,6 +157,8 @@ export function renderSpectralLocusXYZ(
     const binormals: Array<Babylon.Vector3> = XYZ_locus_curve.getBinormals();
     const markerScale: number = 0.02;
     const labelSize: number = 0.08;
+
+    // configure label rendering options
     const labelOptions: RenderLabelOptions = {
       fontSize: 160,
       fontWeight: "normal",
@@ -166,44 +173,42 @@ export function renderSpectralLocusXYZ(
 
     // iterate through each curve point to render wavelength markers
     // along the path. Markers are placed with prejudice for legibility.
-    XYZ_locus_curve.getCurve().forEach(
-      (vector: Babylon.Vector3, index: number) => {
-        if (
-          !(index % 100) &&
-          !(index > 0 && index < 700) &&
-          !(
-            index < spectralPoints_xyY.length - 1 &&
-            index > spectralPoints_xyY.length - 1902
-          )
-        ) {
-          // calculate the marker endpoint vector
-          const markerVector: Babylon.Vector3 = vector
-            .add(normals[index].scale(markerScale))
-            .add(binormals[index].scale(markerScale));
+    XYZ_locus_curve.getCurve().forEach(function renderSpectralLocusMarker(
+      vector: Babylon.Vector3,
+      index: number
+    ) {
+      // capture the current wavelength value
+      const lambda: number =
+        (spectralMin * (1 / wavelengthDelta) + index) / (1 / wavelengthDelta);
 
-          // render marker line
-          Babylon.MeshBuilder.CreateLines(
-            `XYZ-locus-mark-${index}`,
-            { points: [vector, markerVector] },
-            scene
-          );
+      // determine the threshold coefficient to determine bias against frequency
+      // of labeling where lambda approaches min or max of spectrum
+      const markerThreshold: number = lambda >= 460 && lambda <= 610 ? 1 : 10;
 
-          // render the marker label relative to the marker with rendering options.
-          renderLabel(
-            `${Number(rawSpectralData[index][0])}nm`,
-            markerVector,
-            labelOptions,
-            scene
-          );
-        }
+      // label at weighted bias wavelengths
+      if (!(lambda % ((1 / wavelengthDelta) * markerThreshold))) {
+        // calculate the marker endpoint vector
+        const markerVector: Babylon.Vector3 = vector
+          .add(normals[index].scale(markerScale))
+          .add(binormals[index].scale(markerScale));
+
+        // render marker line
+        Babylon.MeshBuilder.CreateLines(
+          `XYZ-locus-mark-${index}`,
+          { points: [vector, markerVector] },
+          scene
+        );
+
+        // render the marker label relative to the marker with rendering options.
+        renderLabel(`${lambda}nm`, markerVector, labelOptions, scene);
       }
-    );
+    });
 
     // Build the main locus curve mesh into the scene
     Babylon.MeshBuilder.CreateLines(
       name,
       {
-        points: spectralPoints_xyY,
+        points: XYZ_locus_curve.getCurve(),
       },
       scene
     );
@@ -220,37 +225,44 @@ export function renderColorSpace(
 ) {
   const { convertToReferenceSpace } = profiles[colorSpace];
 
+  // include black & white points with the 6 primaries
   const XYZ_positions: number[][] = [[0, 0, 0], ...XYZ_primaries, [1, 1, 1]];
 
+  // positions are calculated by mapping primary points + whitepoint & blackpoint
+  // as they are companded from their source color space into reference space
   const positions: number[] = XYZ_positions.map((color: number[]) =>
-    convertToReferenceSpace(color, colorSpace)
+    compand_RGB_XYZ_Space(color, colorSpace)
   ).flat();
 
-  const colors: number[] = XYZ_positions.map((primary: number[]) =>
-    gammaCorrect_linearRGB_to_sRGB(primary, colorSpace)
-  )
-    .map((primary: number[]) =>
-      convertToReferenceSpace(primary, colorSpace).concat([1])
-    )
-    .flat();
+  // colors must also compand values from source space to reference space but also
+  // should apply gamma correction relevant to the profile for accurate color representation
+  const colors: number[] = XYZ_positions.map((color: number[]) =>
+    convertToReferenceSpace(color, colorSpace).concat([1])
+  ).flat();
 
+  // define babylon VertexData to be applied to the 3d box mesh
   const vertexData: Babylon.VertexData = new Babylon.VertexData();
   vertexData.positions = positions;
   vertexData.colors = colors;
 
+  // search for the existing mesh name if any controls have been updated
   let existingMesh: Babylon.AbstractMesh | undefined = findMeshByName(
     name,
     scene
   );
 
+  // update the mesh if this is a re-render by applying the new positions/color data
   if (existingMesh) {
     existingMesh.setVerticesData(
       Babylon.VertexBuffer.PositionKind,
-      vertexData.positions,
+      positions,
       true
     );
     existingMesh.setVerticesData(Babylon.VertexBuffer.ColorKind, colors, true);
-  } else {
+  }
+  // otherwise we are creating a fresh/new mesh
+  else {
+    // which will require facets to be defined through indices property in VertexData
     vertexData.indices = [
       [3, 0, 1],
       [3, 1, 2],
@@ -266,16 +278,23 @@ export function renderColorSpace(
       [0, 5, 6],
     ].flat();
 
+    // creation of material for wireframe effect
     const mat: Babylon.StandardMaterial = new Babylon.StandardMaterial(
       "emissive",
       scene
     );
-    mat.diffuseColor = new Babylon.Color3(1, 1, 0);
+    mat.diffuseColor = new Babylon.Color3(1, 1, 1);
     mat.emissiveColor = new Babylon.Color3(1, 1, 1);
     mat.useEmissiveAsIllumination = true;
+    mat.wireframe = true;
 
+    // base mesh with vertex data applied
     const mesh: Babylon.Mesh = new Babylon.Mesh(name, scene);
     vertexData.applyToMesh(mesh);
+
+    // clone the base mesh and apply material for the additional wireframe effect
+    const wireframe: Babylon.Mesh = mesh.clone(`${name}_wireframe`);
+    wireframe.material = mat;
   }
 }
 
@@ -297,6 +316,8 @@ interface RenderLabelOptions {
   textureHeight?: number;
 }
 
+// given a label text, Vector3 position, and set of options
+// render a label as a billboard in 3d space
 export function renderLabel(
   label: string,
   position: Babylon.Vector3,

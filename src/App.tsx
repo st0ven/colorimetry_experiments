@@ -1,11 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  ChangeEvent,
-  useMemo,
-  useEffect,
-  Key,
-} from "react";
+import React, { useState, useCallback, ChangeEvent, useMemo } from "react";
 import styles from "./App.module.scss";
 import { Graph3d } from "./components/graph-3d";
 import { ColorSpace, profiles } from "./helper/color-profile-conversion";
@@ -17,7 +10,7 @@ import {
 import * as Babylon from "babylonjs";
 
 const XYZ_data = require("./data/cmf_1931_XYZ_0.1nm.csv");
-const meshNames: any = {
+export const meshNames: any = {
   locus: "spectral_locus",
   chromaticPlane: "chromaticity_plane",
   colorSpace: "color_space",
@@ -52,7 +45,7 @@ const renderChromaticityPlane: any = {
   },
 
   appleRGB(scene: Babylon.Scene) {
-    renderChromaticityPlaneWithSpace(ColorSpace.appleRGB, scene);
+    //renderChromaticityPlaneWithSpace(ColorSpace.appleRGB, scene);
   },
 
   adobeWideGamut(scene: Babylon.Scene) {
@@ -62,6 +55,10 @@ const renderChromaticityPlane: any = {
   displayP3(scene: Babylon.Scene) {
     renderChromaticityPlaneWithSpace(ColorSpace.displayP3, scene);
   },
+
+  proPhoto(scene:Babylon.Scene){
+    renderChromaticityPlaneWithSpace(ColorSpace.proPhoto, scene);
+  }
 };
 
 const renderColorSpaceMesh: any = {
@@ -69,17 +66,19 @@ const renderColorSpaceMesh: any = {
     renderColorSpace(meshNames.colorSpace, ColorSpace.sRGB, scene);
   },
   adobeRGB(scene: Babylon.Scene) {
-    console.log(scene);
     renderColorSpace(meshNames.colorSpace, ColorSpace.adobeRGB, scene);
   },
   appleRGB(scene: Babylon.Scene) {
-    renderColorSpace(meshNames.colorSpace, ColorSpace.appleRGB, scene);
+    //renderColorSpace(meshNames.colorSpace, ColorSpace.appleRGB, scene);
   },
   adobeWideGamut(scene: Babylon.Scene) {
     renderColorSpace(meshNames.colorSpace, ColorSpace.adobeWideGamut, scene);
   },
   displayP3(scene: Babylon.Scene) {
     renderColorSpace(meshNames.colorSpace, ColorSpace.displayP3, scene);
+  },
+  proPhoto(scene: Babylon.Scene) {
+    renderColorSpace(meshNames.colorSpace, ColorSpace.proPhoto, scene);
   },
 };
 
@@ -127,6 +126,7 @@ function App() {
           {colorSpaceOptions}
         </select>
         <Graph3d
+          //axisLabels={["x", "Y", "y"]}
           lights={[renderHemiLight]}
           meshes={[
             render_spectral_locus,

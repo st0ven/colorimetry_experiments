@@ -9,12 +9,13 @@ const axisMarkerVectorY: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
 const axisMarkerVectorZ: Babylon.Vector3 = new Babylon.Vector3(1, 0, 0);
 
 enum Axis {
-  X,
-  Y,
-  Z,
+  X = "X",
+  Y = "Y",
+  Z = "Z",
 }
 
 interface AxisBaseRenderOptions {
+  axisLabel?: string | undefined,
   markers: number;
   markerSize?: number;
   max?: number;
@@ -30,6 +31,7 @@ interface AxisRenderOptions extends AxisBaseRenderOptions {
 function renderAxis(
   axis: Axis,
   {
+    axisLabel,
     markers = 1,
     markerSize = 0.02,
     markerVector,
@@ -97,8 +99,7 @@ function renderAxis(
 
   // render axis label
   renderLabel(
-    //axis === Axis.X ? "R" : axis === Axis.Y ? "G" : "B",
-    Axis[axis],
+    axisLabel || Axis[axis],
     new Babylon.Vector3(
       axis === Axis.X ? max * 1.05 : 0,
       axis === Axis.Y ? max * 1.05 : 0,
@@ -119,11 +120,12 @@ function renderAxis(
 }
 
 interface Graph3dProps {
+  axisLabels?: Array<string>
   lights?: Array<(scene: Babylon.Scene) => void>;
   meshes?: Array<(scene: Babylon.Scene) => void>;
 }
 
-export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
+export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dProps) {
   // component references
   const canvasRef: React.RefObject<HTMLCanvasElement> = useRef(null);
   const cameraRef: React.MutableRefObject<
@@ -133,6 +135,9 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
     Babylon.Engine | undefined
   > = useRef();
   const sceneRef: React.MutableRefObject<Babylon.Scene | undefined> = useRef();
+
+  // label destructuring for axes
+  const [labelX, labelY, labelZ] = axisLabels;
 
   // when canvasRef.current value is set, execute initial canvas statements
   useEffect(
@@ -174,12 +179,15 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
           opacity: 0.5,
         };
         const axisOptionsX: AxisRenderOptions = Object.assign({}, axisOptions, {
+          axisLabel: labelX,
           markerVector: axisMarkerVectorX,
         });
         const axisOptionsY: AxisRenderOptions = Object.assign({}, axisOptions, {
+          axisLabel: labelY,
           markerVector: axisMarkerVectorY,
         });
         const axisOptionsZ: AxisRenderOptions = Object.assign({}, axisOptions, {
+          axisLabel: labelZ,
           markerVector: axisMarkerVectorZ,
         });
 
@@ -227,5 +235,5 @@ export function Graph3d({ lights = [], meshes = [] }: Graph3dProps) {
     [lights, meshes, sceneRef, engineRef, cameraRef, canvasRef]
   );
 
-  return <canvas className={styles.graph3d} ref={canvasRef}></canvas>;
+  return <canvas className={styles.graph3d} ref={canvasRef} width={960} height={640}></canvas>;
 }

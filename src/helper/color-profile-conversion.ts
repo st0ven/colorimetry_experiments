@@ -8,8 +8,9 @@ import {
 export enum ColorSpace {
   adobeRGB = "adobeRGB",
   adobeWideGamut = "adobeWideGamut",
-  appleRGB = "appleRGB",
+  //appleRGB = "appleRGB",
   displayP3 = "displayP3",
+  proPhoto = 'proPhoto',
   sRGB = "sRGB",
 }
 
@@ -62,8 +63,9 @@ export const adaptiveMatrix = {
 
 export const profiles: any = {
   [ColorSpace.adobeRGB]: {
-    convertToReferenceSpace: convert_space_RGB_to_XYZ,
-    convertFromReferenceSpace: convert_space_XYZ_to_RGB,
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
     illuminant: illuminant[Illuminant.D65],
     label: "Adobe RGB 1998",
     primaries: [
@@ -73,13 +75,16 @@ export const profiles: any = {
     ],
     transferParams: {
       alpha: 1,
+      beta: 0,
+      beta_rho: 0,
       gammaLimit: 563 / 256,
       gammaLinear: 1.8,
     },
   },
   [ColorSpace.adobeWideGamut]: {
-    convertToReferenceSpace: convert_space_RGB_to_XYZ,
-    convertFromReferenceSpace: convert_space_XYZ_to_RGB,
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
     illuminant: illuminant[Illuminant.D50],
     label: "Adobe Wide Gamut",
     primaries: [
@@ -89,13 +94,17 @@ export const profiles: any = {
     ],
     transferParams: {
       alpha: 1,
+      beta: 0,
+      beta_rho: 0,
       gammaLimit: 536 / 256,
       gammaLinear: 2.2,
     },
   },
+  /*
   [ColorSpace.appleRGB]: {
-    convertToReferenceSpace: convert_space_RGB_to_XYZ,
-    convertFromReferenceSpace: convert_space_XYZ_to_RGB,
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
     illuminant: illuminant[Illuminant.D65],
     label: "Apple RGB",
     primaries: [
@@ -105,13 +114,17 @@ export const profiles: any = {
     ],
     transferParams: {
       alpha: 1,
+      beta: 0,
+      beta_rho: 0,
       gammaLimit: 536 / 256,
       gammaLinear: 1.8,
     },
   },
+  */
   [ColorSpace.displayP3]: {
-    convertToReferenceSpace: convert_space_RGB_to_XYZ,
-    convertFromReferenceSpace: convert_space_XYZ_to_RGB,
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
     illuminant: illuminant[Illuminant.D65],
     label: "Display P3",
     primaries: [
@@ -125,9 +138,27 @@ export const profiles: any = {
       gammaLinear: 2.2,
     },
   },
+  [ColorSpace.proPhoto]: {
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
+    illuminant: illuminant[Illuminant.D50],
+    label: "ProPhoto",
+    primaries: [
+      [0.7347, 0.2653],
+      [0.1596, 0.8404],
+      [0.0366, 0.0001],
+    ],
+    transferParams: {
+      alpha: 1,
+      gammaLimit: 9 / 5,
+      gammaLinear: 2.2,
+    },
+  },
   [ColorSpace.sRGB]: {
-    convertToReferenceSpace: convert_space_RGB_to_XYZ,
-    convertFromReferenceSpace: convert_space_XYZ_to_RGB,
+    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
+      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
+    convertToReferenceSpace: compand_RGB_XYZ_Space,
     illuminant: illuminant[Illuminant.D65],
     label: "sRGB",
     primaries: [
@@ -137,11 +168,50 @@ export const profiles: any = {
     ],
     transferParams: {
       alpha: 1.055,
+      beta: 0.0031308,
+      beta_rho: 0.04045,
       gammaLimit: 12 / 5,
       gammaLinear: 2.2,
     },
   },
 };
+
+export function compand_RGB_XYZ_Space(
+  color_xyz: number[],
+  colorSpace: ColorSpace,
+  invert: boolean = false
+): number[] {
+  return matrixMultiply(
+    // first a transformation matrix must be calculated based on
+    // the target color space. Invert the matrix to translate from XYZ -> RGB
+    invert
+      ? invertMatrix(get_transformation_matrix_RGB_to_XYZ(colorSpace))
+      : get_transformation_matrix_RGB_to_XYZ(colorSpace),
+    rotateMatrix([
+      // chromatic adaptation should be considered when the source
+      // color space does not have a default illuminant of the
+      // reference space using D65 illuminant
+      chromatic_adaptation(
+        color_xyz,
+        profiles[colorSpace].illuminant,
+        illuminant[Illuminant.D65]
+      ),
+    ])
+  ).flat();
+}
+
+export function convert_RGB_XYZ_Space(
+  xyz_color: number[],
+  colorSpace: ColorSpace
+): number[] {
+  const { convertToReferenceSpace } = profiles[colorSpace];
+  // convert XYZ primaries to gamma corrected values reflecting proper
+  // color space value and flatten all results.
+  return convertToReferenceSpace(
+    // gamma correct the primary values expressed in xyz
+    gammaCorrect_linearRGB_to_sRGB(xyz_color, colorSpace)
+  );
+}
 
 /*
 Takes an array as a primary xy pair and derives a transformed array
@@ -188,40 +258,6 @@ function get_transformation_matrix_RGB_to_XYZ(
   );
 }
 
-export function convert_space_RGB_to_XYZ(
-  rgbNormal: number[], // expects [r,g,b] format from 0-1
-  toRGBspace: ColorSpace
-): number[] {
-  //console.log(get_transformation_matrix_RGB_to_XYZ(toRGBspace));
-  // return the XYZ value from the RGB color argument to transform
-  return matrixMultiply(
-    get_transformation_matrix_RGB_to_XYZ(toRGBspace),
-    rotateMatrix([
-      chromatic_adaptation(
-        rgbNormal,
-        profiles[toRGBspace].illuminant,
-        illuminant[Illuminant.D50]
-      ),
-    ])
-  ).flat();
-}
-
-export function convert_space_XYZ_to_RGB(
-  xyzColor: number[],
-  toRGBspace: ColorSpace
-) {
-  return matrixMultiply(
-    invertMatrix(get_transformation_matrix_RGB_to_XYZ(toRGBspace)),
-    rotateMatrix([
-      chromatic_adaptation(
-        xyzColor,
-        profiles[toRGBspace].illuminant,
-        illuminant[Illuminant.D50]
-      ),
-    ])
-  ).flat();
-}
-
 // use to transform from one reference illuminant to another
 // reference page:
 // http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
@@ -230,12 +266,10 @@ function chromatic_adaptation(
   s_illuminant: number[],
   d_illuminant: number[]
 ): number[] {
-  console.log(s_illuminant,d_illuminant)
   if (s_illuminant === d_illuminant) {
     // white point is the same, no adaptation is necessary
     return s_XYZ;
   } else {
-    console.log('adapt');
     // define cone response primaries from a source illuminant
     const sourceCrsp: number[] = matrixMultiply(
       adaptiveMatrix.bradford,
@@ -266,84 +300,20 @@ function chromatic_adaptation(
   }
 }
 
-/*
-export function calculate_XYZspace_transformation_matrix(
-  source_component_primaries_xyY: number[][],
-  source_whitepoint_xyY: number[]
-): number[][] {
-  const XYZ_primaries: number[][] = source_component_primaries_xyY.map(
-    (primary: number[]) => convert_component_xy_to_xyz(primary)
-  );
-  const XYZ_whitepoint: number[] = find_wXYZ_from_wxyz(
-    convert_component_xy_to_xyz(source_whitepoint_xyY)
-  );
-  const XYZ_primaries_rotated: number[][] = rotateMatrix(XYZ_primaries);
-  const [rXYZ, gXYZ, bXYZ]: number[][] = matrixMultiply(
-    invertMatrix(XYZ_primaries_rotated),
-    rotateMatrix([XYZ_whitepoint])
-  );
-  const V_expanded = [
-    [...rXYZ, 0, 0],
-    [0, ...gXYZ, 0],
-    [0, 0, ...bXYZ],
-  ];
-  const transformMatrix = matrixMultiply(XYZ_primaries_rotated, V_expanded);
-  return transformMatrix;
+export function convert_XYZ_to_xyY([X, Y, Z]: number[]) {
+  const sum = X + Y + Z;
+  return [X / sum, Y / sum, Y];
 }
-*/
 
-/*
- Conversion helper functions that allow for determining tarnsform matrix from some defined color space back into XYZ color space
-*/
+// Conversion helper functions that allow for determining tarnsform matrix
+// from some defined color space back into XYZ color space
 export function convert_component_xy_to_xyz([cX, cY]: number[]): number[] {
   return [cX, cY, 1 - cX - cY];
 }
 
-export function convert_component_xyY_to_XYZ(xyYCoord: number[]): number[] {
-  return [
-    (xyYCoord[0] * xyYCoord[2]) / xyYCoord[1],
-    xyYCoord[2],
-    ((1 - xyYCoord[0] - xyYCoord[1]) * xyYCoord[2]) / xyYCoord[1],
-  ];
+export function convert_component_xyY_to_XYZ([x, y, Y]: number[]): number[] {
+  return [(x * Y) / y, Y, ((1 - x - y) * Y) / y];
 }
-/*
-export function convert_RGB_to_XYZ_space(
-  rgb: number[],
-  colorSpace: ColorSpace
-): number[] {
-  const { primaries, whitePoint } = profiles[colorSpace];
-  const linear_rgb: number[] = gammaCorrect_sRGB_to_linearRGB(rgb);
-  const tMatrix: number[][] = calculate_XYZspace_transformation_matrix(
-    primaries,
-    whitePoint
-  );
-  return rotateMatrix(
-    matrixMultiply(tMatrix, rotateMatrix([linear_rgb]))
-  ).flat();
-}
-
-export function convert_XYZ_to_sRGB_space(XYZ_color: number[]) {
-  const tMatrix: number[][] = [
-    [3.24096994, -1.5378318, -0.49861076],
-    [-0.96924364, 1.8759675, 0.04155506],
-    [0.05563008, -0.20397696, 1.05697151],
-  ];
-  const whitePoint: number[] = [0.9505, 1, 1.089];
-  const linearRGB: number[] = matrixMultiply(
-    tMatrix,
-    rotateMatrix([XYZ_color])
-  ).flat();
-  return gammaCorrect_linearRGB_to_sRGB(linearRGB)
-    .map((component_linearRGB: number) => component_linearRGB * 255)
-    .map((component_linearRGB: number) =>
-      component_linearRGB < 0
-        ? 0
-        : component_linearRGB > 255
-        ? 255
-        : Math.round(component_linearRGB)
-    );
-}
-*/
 
 export function convert_XYZ_to_Luv_space(
   c_XYZ: number[],
@@ -366,11 +336,6 @@ export function convert_XYZ_to_Luv_space(
   const u = 13 * L * (u_prime - ur_prime);
   const v = 13 * L * (v_prime - vr_prime);
   return [L, u, v];
-}
-
-export function convert_XYZ_to_xyY([X, Y, Z]: number[]) {
-  const sum = X + Y + Z;
-  return [X / sum, Y / sum, Y];
 }
 
 export function convert_Luv_to_XYZ_space(
@@ -442,13 +407,44 @@ export function gammaCorrect_linearRGB_to_sRGB(
         : alpha * Math.pow(c, 1 - gammaLimit) - (1 - alpha)
       : Math.pow(c, gammaLinear)
   );
-
-  /*
-  const threshold: number = 0.04045;
-  return linearRGB.map((c: number) =>
-    c > threshold ? Math.pow((c + 0.055) / 1.055, 2.4) : (25 * c) / 323
-  );
-  */
 }
 
-//export function
+// Experiment to build approximations of CIE CMF data without having to store
+// tabular representation of this data.
+// reference: http://jcgt.org/published/0002/02/01/paper.pdf
+export function expandCMFValues(spectrum: number[]): number[][] {
+  const coefficientTable: any = {
+    x: {
+      alpha: [0.362, 1.056, -0.065],
+      beta: [442, 599.8, 501.1],
+      gamma: [0.0624, 0.0264, 0.049],
+      delta: [0.0374, 0.0323, 0.0382],
+    },
+    y: {
+      alpha: [0.821, 0.286],
+      beta: [568.8, 530.9],
+      gamma: [0.0213, 0.0613],
+      delta: [0.0247, 0.0322],
+    },
+    z: {
+      alpha: [1.217, 0.681],
+      beta: [437, 459],
+      gamma: [0.0845, 0.0385],
+      delta: [0.0278, 0.0725],
+    },
+  };
+
+  function cBarSum(lambda: number, { alpha, beta, gamma, delta }: any): number {
+    const gaussianPassCount: number = alpha.length;
+    let sum: number = 0;
+    for (let i = 0, t; i < gaussianPassCount; i++) {
+      t = (lambda - beta[i]) * (lambda < beta[i] ? gamma[i] : delta[i]);
+      sum += alpha[i] * Math.exp(-0.5 * t * t);
+    }
+    return sum;
+  }
+
+  return spectrum.map((lambda: number) =>
+    ["x", "y", "z"].map((c: string) => cBarSum(lambda, coefficientTable[c]))
+  );
+}
