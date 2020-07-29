@@ -1,5 +1,9 @@
 import * as Babylon from "babylonjs";
-import { compand_RGB_XYZ_Space } from "./color-profile-conversion";
+import {
+  compand_RGB_XYZ_Space,
+  transformXYZtoRGB,
+  transformRGBtoXYZ,
+} from "./color-space-conversion";
 import { ColorSpace, colorSpace, XYZ_primaries } from "./color-space";
 
 // itereate through scene meshes and return the mesh instance that matches
@@ -11,6 +15,17 @@ export function findMeshByName(
   for (let mesh of scene.meshes) {
     if (mesh.name === name) {
       return mesh;
+    }
+  }
+  return undefined;
+}
+export function findMaterialByName(
+  name: string,
+  scene: Babylon.Scene
+): Babylon.Material | undefined {
+  for (let material of scene.materials) {
+    if (material.name === name) {
+      return material;
     }
   }
   return undefined;
@@ -207,8 +222,6 @@ export function renderColorSpace(
   colorSpaceName: ColorSpace,
   scene: Babylon.Scene
 ) {
-  const { convertToReferenceSpace } = colorSpace[colorSpaceName];
-
   // include black & white points with the 6 primaries
   const XYZ_positions: number[][] = [[0, 0, 0], ...XYZ_primaries, [1, 1, 1]];
 
@@ -221,7 +234,7 @@ export function renderColorSpace(
   // colors must also compand values from source space to reference space but also
   // should apply gamma correction relevant to the profile for accurate color representation
   const colors: number[] = XYZ_positions.map((color: number[]) =>
-    convertToReferenceSpace(color, colorSpaceName).concat([1])
+    transformXYZtoRGB(color, colorSpaceName).concat([1])
   ).flat();
 
   // define babylon VertexData to be applied to the 3d box mesh
@@ -267,19 +280,158 @@ export function renderColorSpace(
       "emissive",
       scene
     );
-    mat.diffuseColor = new Babylon.Color3(1, 1, 1);
     mat.emissiveColor = new Babylon.Color3(1, 1, 1);
     mat.useEmissiveAsIllumination = true;
     mat.wireframe = true;
 
+    const invisMat: Babylon.StandardMaterial = new Babylon.StandardMaterial(
+      "alpha-mat",
+      scene
+    );
+    invisMat.alpha = 1;
+
     // base mesh with vertex data applied
     const mesh: Babylon.Mesh = new Babylon.Mesh(name, scene);
+    mesh.overlayAlpha = 0;
+    mesh.material = invisMat;
     vertexData.applyToMesh(mesh);
 
     // clone the base mesh and apply material for the additional wireframe effect
     const wireframe: Babylon.Mesh = mesh.clone(`${name}_wireframe`);
     wireframe.material = mat;
+
+    /*const mappedColors = [
+      XYZ_primaries[0],
+      XYZ_primaries[2],
+      XYZ_primaries[4],
+    ].map(([X, Y, Z]: number[]) =>
+      arr.map(
+        (a) =>
+          new Babylon.Vector3(
+            ...convert_XYZ_to_Luv_space(
+              convert_RGB_XYZ_Space(
+                [X * (a / 255), Y * (a / 255), Z * (a / 255)],
+                colorSpaceName
+              ),
+              illuminant[Illuminant.C]
+            )
+          )
+      )
+    );
+    mappedColors.map((components: Babylon.Vector3[], f) => {
+      Babylon.MeshBuilder.CreateLines(
+        `spectralz-${f}`,
+        { points: components },
+        scene
+      );
+    });
+    console.log(mappedColors);*/
+
+    /*const points: number[][] = [];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < (i < 2 ? 256 : 256); j++) {
+        points.push([
+          (i ? 255 : j) / 255,
+          (i === 1 ? j : i > 1 ? 255 : 0) / 255,
+          (i === 2 ? j : 0) / 255,
+        ]);
+      }
+    }
+    const allPoints: number[][][] = [
+      points,
+      points.map(([X, Y, Z]: number[]) => [Y, Z, X]),
+      points.map(([X, Y, Z]: number[]) => [Z, X, Y]),
+    ]//.map((primaryPoints: number[][]) => rotateMatrix(primaryPoints));
+    const lines: Babylon.Vector3[][] = allPoints.map(
+      (primaryPoints: number[][]) =>
+        primaryPoints.map(
+          (points: number[]) =>
+            new Babylon.Vector3(
+              ...compand_RGB_XYZ_Space(points, colorSpaceName)
+            )
+        )
+    );
+    Babylon.MeshBuilder.CreateLineSystem(
+      "points-test",
+      { lines: lines },
+      scene
+    );
+    console.log(points);
+    */
   }
+}
+
+export function renderRGBPoint(
+  rgb_color: number[],
+  currentSpace: ColorSpace,
+  scene: Babylon.Scene
+) {
+  const transformFunc: any = colorSpace[currentSpace].convertToReferenceSpace;
+
+  const entityNames: any = {
+    transform: "rgb-point-transform",
+    material: "rgb-point-material",
+    mesh: "rgb-point-mesh",
+  };
+
+  // derive location in XYZ space of point center
+  const pointPosition: number[] = compand_RGB_XYZ_Space(
+    rgb_color,
+    currentSpace
+  );
+
+  // derive normalized RGB color for the point within the current space
+  const pointColor: number[] = transformRGBtoXYZ(rgb_color, currentSpace);
+
+  // clear transform nodes in scene
+  scene.transformNodes.some((node: Babylon.TransformNode): boolean => {
+    return node.name === entityNames.transform ? (node.dispose(), true) : false;
+  });
+
+  // create new transform node
+  const transformNode: Babylon.TransformNode = new Babylon.TransformNode(
+    entityNames.transform
+  );
+
+  // move the transformation node to align with the updated position
+  transformNode.position.x = pointPosition[0];
+  transformNode.position.y = pointPosition[1];
+  transformNode.position.z = pointPosition[2];
+
+  // find the material within the scene if it hasnt yet been created
+  const foundMaterial: Babylon.Material | undefined = findMaterialByName(
+    entityNames.material,
+    scene
+  );
+
+  // and dispose of it if found
+  if (foundMaterial) {
+    foundMaterial.dispose(true, true);
+  }
+
+  // create a new material
+  const material: Babylon.StandardMaterial = new Babylon.StandardMaterial(
+    entityNames.material,
+    scene
+  );
+
+  // apply the converted color as the material diffuse color
+  material.diffuseColor = new Babylon.Color3(...pointColor);
+  console.log(material.diffuseColor);
+
+  // search for the existing mesh name if any controls have been updated
+  // or create a new one if none are found
+  let mesh: Babylon.AbstractMesh | Babylon.Mesh | undefined =
+    findMeshByName(entityNames.mesh, scene) ||
+    Babylon.SphereBuilder.CreateSphere(
+      entityNames.mesh,
+      { diameter: 0.04 },
+      scene
+    );
+
+  // set mesh properties
+  mesh.parent = transformNode;
+  mesh.material = material;
 }
 
 /*
@@ -363,4 +515,17 @@ export function renderLabel(
     backgroundColor,
     true
   );
+}
+
+// render hemisphere light to 3d graphs
+export function renderHemiLight(scene: Babylon.Scene) {
+  // lighting instantitation
+  const light: Babylon.HemisphericLight = new Babylon.HemisphericLight(
+    "hemi1",
+    new Babylon.Vector3(0, 20, 0),
+    scene
+  );
+  light.diffuse = new Babylon.Color3(1, 1, 1);
+  light.groundColor = new Babylon.Color3(1, 1, 1);
+  light.specular = new Babylon.Color3(0, 0, 0);
 }

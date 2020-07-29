@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect } from "react";
+import cx from "classnames";
 import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import { renderLabel } from "../helper/babylon-render";
@@ -15,7 +16,7 @@ enum Axis {
 }
 
 interface AxisBaseRenderOptions {
-  axisLabel?: string | undefined,
+  axisLabel?: string | undefined;
   markers: number;
   markerSize?: number;
   max?: number;
@@ -120,12 +121,18 @@ function renderAxis(
 }
 
 interface Graph3dProps {
-  axisLabels?: Array<string>
+  axisLabels?: Array<string>;
+  className?: string;
   lights?: Array<(scene: Babylon.Scene) => void>;
   meshes?: Array<(scene: Babylon.Scene) => void>;
 }
 
-export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dProps) {
+export function Graph3d({
+  axisLabels = [],
+  className,
+  lights = [],
+  meshes = [],
+}: Graph3dProps) {
   // component references
   const canvasRef: React.RefObject<HTMLCanvasElement> = useRef(null);
   const cameraRef: React.MutableRefObject<
@@ -139,70 +146,77 @@ export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dPr
   // label destructuring for axes
   const [labelX, labelY, labelZ] = axisLabels;
 
+  // define axis label options to be used for rendering
+  const axisOptions: AxisBaseRenderOptions = {
+    markers: 3,
+    markerSize: 0.03,
+    max: 1,
+    opacity: 0.5,
+  };
+
+  // mix in axis specific options to the shared option parameters
+  const axisOptionsX: AxisRenderOptions = Object.assign({}, axisOptions, {
+    axisLabel: labelX,
+    markerVector: axisMarkerVectorX,
+  });
+  const axisOptionsY: AxisRenderOptions = Object.assign({}, axisOptions, {
+    axisLabel: labelY,
+    markerVector: axisMarkerVectorY,
+  });
+  const axisOptionsZ: AxisRenderOptions = Object.assign({}, axisOptions, {
+    axisLabel: labelZ,
+    markerVector: axisMarkerVectorZ,
+  });
+
+  // apply a classname optionally to the graph wrapper
+  const graphCx: string = cx(styles.graph3d, className);
+
   // when canvasRef.current value is set, execute initial canvas statements
-  useEffect(
-    function initCanvas() {
-      if (canvasRef.current) {
-        // initialize all Babylon related refs required to render a scene
-        engineRef.current = new Babylon.Engine(
-          canvasRef.current,
-          true,
-          {},
-          true
-        );
+  useLayoutEffect(function initCanvas() {
+    if (
+      canvasRef.current &&
+      !engineRef.current &&
+      !sceneRef.current &&
+      !cameraRef.current
+    ) {
+      console.log("initial");
+      // initialize all Babylon related refs required to render a scene
+      engineRef.current = new Babylon.Engine(canvasRef.current, true, {}, true);
 
-        sceneRef.current = new Babylon.Scene(engineRef.current);
-        sceneRef.current.shadowsEnabled = false;
-        sceneRef.current.clearColor = new Babylon.Color4(0.06,0.04,0.14,1);
+      sceneRef.current = new Babylon.Scene(engineRef.current);
+      sceneRef.current.shadowsEnabled = false;
+      sceneRef.current.clearColor = new Babylon.Color4(0.06, 0.04, 0.14, 1);
 
-        cameraRef.current = new Babylon.ArcRotateCamera(
-          "camera",
-          Math.PI / 4,
-          Math.PI / 3,
-          22.5,
-          new Babylon.Vector3(0.5, 0.5, 0.5),
-          sceneRef.current
-        );
-        // set camera constraints to limit/lock on relevant visualization space
-        cameraRef.current.allowUpsideDown = false;
-        //cameraRef.current.lowerAlphaLimit = 0;
-        //cameraRef.current.upperAlphaLimit = Math.PI / 2;
-        cameraRef.current.lowerBetaLimit = Math.PI / 4;
-        cameraRef.current.upperBetaLimit = (Math.PI / 3) * 2;
-        cameraRef.current.lowerRadiusLimit = 2;
-        cameraRef.current.upperRadiusLimit = 2;
+      cameraRef.current = new Babylon.ArcRotateCamera(
+        "camera",
+        Math.PI / 4,
+        Math.PI / 3,
+        22.5,
+        new Babylon.Vector3(0.5, 0.5, 0.5),
+        sceneRef.current
+      );
+      // set camera constraints to limit/lock on relevant visualization space
+      cameraRef.current.allowUpsideDown = false;
 
-        const axisOptions: AxisBaseRenderOptions = {
-          markers: 3,
-          markerSize: 0.03,
-          max: 1,
-          opacity: 0.5,
-        };
-        const axisOptionsX: AxisRenderOptions = Object.assign({}, axisOptions, {
-          axisLabel: labelX,
-          markerVector: axisMarkerVectorX,
-        });
-        const axisOptionsY: AxisRenderOptions = Object.assign({}, axisOptions, {
-          axisLabel: labelY,
-          markerVector: axisMarkerVectorY,
-        });
-        const axisOptionsZ: AxisRenderOptions = Object.assign({}, axisOptions, {
-          axisLabel: labelZ,
-          markerVector: axisMarkerVectorZ,
-        });
+      // set control limits to the camera
+      cameraRef.current.lowerBetaLimit = Math.PI / 4;
+      cameraRef.current.upperBetaLimit = (Math.PI / 3) * 2;
+      cameraRef.current.lowerRadiusLimit = 2;
+      cameraRef.current.upperRadiusLimit = 2;
 
-        renderAxis(Axis.X, axisOptionsX, sceneRef.current);
-        renderAxis(Axis.Y, axisOptionsY, sceneRef.current);
-        renderAxis(Axis.Z, axisOptionsZ, sceneRef.current);
+      // attach camera controls to the canvas
+      cameraRef.current.attachControl(canvasRef.current, true);
 
-        // render loop to allow interactivity
-        engineRef.current.runRenderLoop(() => {
-          sceneRef.current?.render(true);
-        });
-      }
-    },
-    [canvasRef, cameraRef, engineRef, sceneRef]
-  );
+      renderAxis(Axis.X, axisOptionsX, sceneRef.current);
+      renderAxis(Axis.Y, axisOptionsY, sceneRef.current);
+      renderAxis(Axis.Z, axisOptionsZ, sceneRef.current);
+
+      // render loop to allow interactivity
+      engineRef.current.runRenderLoop(() => {
+        sceneRef.current?.render(true);
+      });
+    }
+  });
 
   useEffect(
     function renderGraph() {
@@ -210,8 +224,7 @@ export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dPr
         sceneRef.current &&
         engineRef.current &&
         cameraRef.current &&
-        canvasRef.current &&
-        meshes.length
+        canvasRef.current
       ) {
         // this should be extracted from this component scope altogether
         meshes?.forEach((meshRenderFunction: any, index: number) => {
@@ -219,7 +232,7 @@ export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dPr
             meshRenderFunction(sceneRef.current);
           }
         });
-
+        // loop through all light rendering functions to include within scene
         lights?.forEach(
           (lightRenderFunction: (scene: Babylon.Scene) => void) => {
             if (lightRenderFunction && sceneRef.current) {
@@ -227,13 +240,17 @@ export function Graph3d({ axisLabels = [], lights = [], meshes = [] }: Graph3dPr
             }
           }
         );
-
-        // attach camera controls to the canvas
-        cameraRef.current.attachControl(canvasRef.current, true);
       }
     },
     [lights, meshes, sceneRef, engineRef, cameraRef, canvasRef]
   );
 
-  return <canvas className={styles.graph3d} ref={canvasRef} width={960} height={640}></canvas>;
+  return (
+    <canvas
+      className={graphCx}
+      ref={canvasRef}
+      width={960}
+      height={640}
+    ></canvas>
+  );
 }
