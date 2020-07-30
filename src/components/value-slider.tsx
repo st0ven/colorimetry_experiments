@@ -20,8 +20,10 @@ export function ValueSlider({
   // element React refs
   const handleRef: React.RefObject<HTMLDivElement> = useRef(null);
   const fillRef: React.RefObject<HTMLDivElement> = useRef(null);
+  const sliderRef: React.RefObject<HTMLDivElement> = useRef(null);
 
-  const [relativeOffset, setRelativeOffset] = useState<number>(offset | 0);
+  // keep state of the relative offset of the slider handle
+  const [relativeOffset, setRelativeOffset] = useState<number>(offset);
 
   // deconstruct/import interaction coordinates hook
   const { offsetX }: UseInteractionCoordinates = useInteractionCoordinates(
@@ -33,23 +35,32 @@ export function ValueSlider({
 
   // update value to parent
   useEffect(() => {
-    if (onChange) {
-      onChange(offsetX);
+    if (
+      onChange &&
+      offsetX !== undefined &&
+      sliderRef.current &&
+      fillRef.current
+    ) {
+      const { left }: ClientRect = sliderRef.current?.getBoundingClientRect();
+      const { width }: ClientRect = fillRef.current?.getBoundingClientRect();
+      const setOffsetX: number = (offsetX - left) / width;
+      onChange(setOffsetX);
     }
-  }, [offsetX, onChange]);
+  }, [offsetX, onChange, sliderRef, fillRef]);
 
   useEffect(() => {
-    if (fillRef.current) {
-      const { width }: ClientRect = fillRef.current.getBoundingClientRect();
-      setRelativeOffset(offset * width);
-    }
-  }, [offsetX, offset, fillRef]);
+    setRelativeOffset(offset * Math.pow(2, 8));
+  }, [offset]);
 
   // render output
   return (
-    <div className={sliderCx}>
+    <div className={sliderCx} ref={sliderRef}>
       <div className={styles.fill} ref={fillRef}></div>
-      <div className={styles.handle} ref={handleRef} style={{left: `${relativeOffset}px`}}></div>
+      <div
+        className={styles.handle}
+        ref={handleRef}
+        style={{ left: `${relativeOffset}px`, transform: `translateX(-50%)` }}
+      ></div>
     </div>
   );
 }

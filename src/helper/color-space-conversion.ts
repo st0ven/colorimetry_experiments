@@ -26,103 +26,68 @@ export const adaptiveMatrix = {
   ],
 };
 
-export interface CompandRGBtoXYZspaceParams {
-  invert?: boolean;
-  referenceIlluminant?: number[];
-}
-
-export function compand_RGB_RGB_Space(
-  sourceColor: number[],
-  sourceColorSpace: ColorSpace,
-  destColorSpace: ColorSpace
-): number[] {
-  const destIlluminant: number[] = colorSpace[destColorSpace].illuminant;
-
-  return compand_RGB_XYZ_Space(
-    compand_RGB_XYZ_Space(sourceColor, sourceColorSpace, {
-      referenceIlluminant: destIlluminant,
-    }),
-    sourceColorSpace,
-    {
-      invert: true,
-      referenceIlluminant: destIlluminant,
-    }
-  );
-}
-
-export function compand_RGB_XYZ_Space(
-  color_xyz: number[],
-  colorSpaceName: ColorSpace,
-  options?: CompandRGBtoXYZspaceParams
-): number[] {
-  // destructure options
-  const { invert = false, referenceIlluminant = illuminant[Illuminant.D65] } =
-    options || {};
-
-  return matrixMultiply(
-    // first a transformation matrix must be calculated based on
-    // the target color space. Invert the matrix to translate from XYZ -> RGB
-    invert
-      ? invertMatrix(get_transformation_matrix_RGB_to_XYZ(colorSpaceName))
-      : get_transformation_matrix_RGB_to_XYZ(colorSpaceName),
-    rotateMatrix([
-      // chromatic adaptation should be considered when the source
-      // color space does not have a default illuminant of the
-      // reference space using D65 illuminant
-      chromatic_adaptation(
-        color_xyz,
-        colorSpace[colorSpaceName].illuminant,
-        referenceIlluminant
-      ),
-    ])
-  ).flat();
+interface ColorTransformOptions {
+  compand?: boolean;
+  referenceIlluminant?: Illuminant;
+  sourceIlluminant?: Illuminant;
 }
 
 export function transformRGBtoXYZ(
   rgb_color: number[],
-  destSpace: ColorSpace
+  sourceSpace: ColorSpace,
+  options?: ColorTransformOptions
 ): number[] {
   // get reference for which method the destination color space uses for companding
-  const compandMethod: CompandMethod = transferParams[destSpace].method;
+  const compandMethod: CompandMethod = transferParams[sourceSpace].method;
 
   // get reference to the color space dependent nonLinear method
-  const compandFunc: any = compand[compandMethod].nonLinear;
+  const compandFunc: any = compand[compandMethod].linear;
 
   // get the computed linear RGB color based on the compand function
-  const linearColor: number[] = compandFunc(rgb_color, destSpace);
+  const linearColor: number[] = compandFunc(rgb_color, sourceSpace);
 
   // get the proper transform matrix based on the destination color space
   const transformMatrix: number[][] = get_transformation_matrix_RGB_to_XYZ(
-    destSpace
+    sourceSpace
   );
 
-  // calculate the matrix transformation to complete the process
-  return matrixMultiply(transformMatrix, rotateMatrix([linearColor])).flat();
+  // compute the color in XYZ space
+  const XYZ_color: number[] = matrixMultiply(
+    transformMatrix,
+    rotateMatrix([options?.compand ? linearColor : rgb_color])
+  ).flat();
+
+  // perform chromatic adaptation transformation in case the illuminants of the
+  // reference space and rgb space are different.
+  return chromatic_adaptation(
+    XYZ_color,
+    options?.sourceIlluminant || colorSpace[sourceSpace].illuminant,
+    options?.referenceIlluminant || illuminant[Illuminant.D50]
+  );
 }
 
 export function transformXYZtoRGB(
   xyz_color: number[],
-  destSpace: ColorSpace
+  sourceSpace: ColorSpace,
+  options?: ColorTransformOptions
 ): number[] {
   // get reference for which method the destination color space uses for companding
-  const compandMethod: CompandMethod = transferParams[destSpace].method;
+  const compandMethod: CompandMethod = transferParams[sourceSpace].method;
 
   // get reference to the color space dependent nonLinear method
   const compandFunc: any = compand[compandMethod].linear;
 
   // get the proper transform matrix based on the destination color space
   const transformMatrix: number[][] = get_transformation_matrix_RGB_to_XYZ(
-    destSpace
+    sourceSpace
   );
-
-  console.log(invertMatrix(transformMatrix));
 
   const linearColor: number[] = matrixMultiply(
     invertMatrix(transformMatrix),
     rotateMatrix([xyz_color])
   ).flat();
 
-  return compandFunc(linearColor, destSpace);
+  return compandFunc(linearColor, sourceSpace);
 }
 
 /*
@@ -214,11 +179,6 @@ function chromatic_adaptation(
   }
 }
 
-export function convert_XYZ_to_xyY([X, Y, Z]: number[]) {
-  const sum = X + Y + Z;
-  return [X / sum, Y / sum, Y];
-}
-
 // Conversion helper functions that allow for determining tarnsform matrix
 // from some defined color space back into XYZ color space
 export function convert_component_xy_to_xyz([cX, cY]: number[]): number[] {
@@ -289,72 +249,10 @@ export function find_wXYZ_from_wxyz(wxyz: number[]): number[] {
   return scaleMatrix(1 / wy, [wxyz])[0];
 }
 
-export function transfer_gammaRGB_to_linearRGB(
-  gammaRGB: number[],
-  colorSpaceName: ColorSpace
-): number[] {
-  const { alpha = 1, gammaLimit = 1, gammaLinear = 1 } = colorSpace[
-    colorSpaceName
-  ].transferParams;
-
-  if (colorSpaceName === ColorSpace.sRGB) {
-    const phi: number =
-      (Math.pow(alpha, gammaLimit) * Math.pow(gammaLimit - 1, gammaLimit - 1)) /
-      (Math.pow(alpha - 1, gammaLimit - 1) * Math.pow(gammaLimit, gammaLimit));
-
-    const Ksub0: number = (alpha - 1) / (gammaLimit - 1);
-
-    const linearThreshold: number = Ksub0 / phi;
-
-    return gammaRGB.map((c: number) =>
-      isFinite(phi)
-        ? c < linearThreshold
-          ? phi * c
-          : alpha * Math.pow(c, 1 - gammaLimit) - (1 - alpha)
-        : Math.pow(c, gammaLinear)
-    );
-  } else {
-    return gammaRGB.map((component: number) =>
-      Math.pow(component, 1 / gammaLimit)
-    );
-  }
-}
-
-export function gammaCorrect_linearRGB_to_sRGB(
-  linearRGB: number[],
-  colorSpaceName: ColorSpace
-): number[] {
-  const { alpha = 1, gammaLimit = 1, gammaLinear = 1 } = colorSpace[
-    colorSpaceName
-  ].transferParams;
-
-  if (colorSpaceName === ColorSpace.sRGB) {
-    const phi: number =
-      (Math.pow(alpha, gammaLimit) * Math.pow(gammaLimit - 1, gammaLimit - 1)) /
-      (Math.pow(alpha - 1, gammaLimit - 1) * Math.pow(gammaLimit, gammaLimit));
-
-    const Ksub0: number = (alpha - 1) / (gammaLimit - 1);
-
-    const linearThreshold: number = Ksub0 / phi;
-
-    return linearRGB.map((c: number) =>
-      isFinite(phi)
-        ? c < linearThreshold
-          ? phi * c
-          : alpha * Math.pow(c, 1 - gammaLimit) - (1 - alpha)
-        : Math.pow(c, gammaLinear)
-    );
-  } else {
-    return linearRGB.map((component: number) =>
-      Math.pow(component, 1 / gammaLimit)
-    );
-  }
-}
-
 // Experiment to build approximations of CIE CMF data without having to store
 // tabular representation of this data.
 // reference: http://jcgt.org/published/0002/02/01/paper.pdf
-export function expandCMFValues(spectrum: number[]): number[][] {
+export function approximateCMFValues(spectrum: number[]): number[][] {
   const coefficientTable: any = {
     x: {
       alpha: [0.362, 1.056, -0.065],

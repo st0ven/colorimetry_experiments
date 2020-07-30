@@ -1,7 +1,4 @@
-import {
-  transformXYZtoRGB,
-  transformRGBtoXYZ,
-} from "./color-space-conversion";
+import { transformXYZtoRGB, transformRGBtoXYZ } from "./color-space-conversion";
 
 export enum ColorSpace {
   adobeRGB = "adobeRGB",
@@ -13,17 +10,17 @@ export enum ColorSpace {
 }
 
 export enum Illuminant {
-  A,
-  B,
-  C,
-  D50,
-  D55,
-  D65,
-  D75,
-  E,
-  F2,
-  F7,
-  F11,
+  A = "A",
+  B = "B",
+  C = "C",
+  D50 = "D50",
+  D55 = "D55",
+  D65 = "D65",
+  D75 = "D75",
+  E = "E",
+  F2 = "F2",
+  F7 = "F7",
+  F11 = "F11",
 }
 
 export const illuminant: any = {

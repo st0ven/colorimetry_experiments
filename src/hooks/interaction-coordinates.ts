@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useLayoutEffect } from "react";
 
 export interface UseInteractionCoordinates {
-	hasInteraction: boolean;
-	offsetX: number | undefined;
-	offsetY: number | undefined;
+  hasInteraction: boolean;
+  offsetX: number | undefined;
+  offsetY: number | undefined;
 }
 
 export function useInteractionCoordinates(
@@ -11,7 +11,7 @@ export function useInteractionCoordinates(
 ): UseInteractionCoordinates {
   // hook state
   const [hasInteraction, setHasInteraction] = useState<boolean>(false);
-  const [offsets, hasOffsets] = useState<[number, number]>([0, 0]);
+  const [offsets, hasOffsets] = useState<[number, number] | undefined>();
 
   // handler functions for dragging actions
   const handleDragStart = useCallback(
@@ -27,24 +27,21 @@ export function useInteractionCoordinates(
       if (hasInteraction) {
         const { current } = elementRef;
         if (current && event instanceof MouseEvent) {
-          // destructure bounding box of reference element
-          const { left, top }: ClientRect = current.getBoundingClientRect();
-
           // destructure event offsets for mouse position
           const { clientX, clientY } = event;
 
           // return difference of coordinates based on axis
-          hasOffsets([clientX - left, clientY - top]);
+          hasOffsets([clientX, clientY]);
         }
       }
     },
-    [hasInteraction, hasOffsets, elementRef]
+    [elementRef, hasInteraction, hasOffsets]
   );
 
   // handler function for terminating a drag effort
   const handleDragEnd = useCallback((event: MouseEvent | TouchEvent) => {
     setHasInteraction(false);
-    hasOffsets([0, 0]);
+    hasOffsets(undefined);
   }, []);
 
   // register event handlers to the elementRef parameter
@@ -66,7 +63,7 @@ export function useInteractionCoordinates(
 
   return {
     hasInteraction,
-    offsetX: hasInteraction ? offsets[0] : undefined,
-    offsetY: hasInteraction ? offsets[1] : undefined,
+    offsetX: hasInteraction && offsets ? offsets[0] : undefined,
+    offsetY: hasInteraction && offsets ? offsets[1] : undefined,
   };
 }

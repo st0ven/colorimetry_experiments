@@ -59,9 +59,11 @@ function App() {
           <ColorSpaceOptions />
         </select>
         <Graph3d
-          //axisLabels={["x", "Y", "y"]}
-          lights={[renderHemiLight]}
-          meshes={[render_spectral_locus, renderChromaticityPlaneMesh]}
+          renderMethods={[
+            renderHemiLight,
+            render_spectral_locus,
+            renderChromaticityPlaneMesh,
+          ]}
         ></Graph3d>
       </section>
       <section>

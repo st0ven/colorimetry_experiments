@@ -1,10 +1,12 @@
 import * as Babylon from "babylonjs";
+import { transformRGBtoXYZ } from "./color-space-conversion";
 import {
-  compand_RGB_XYZ_Space,
-  transformXYZtoRGB,
-  transformRGBtoXYZ,
-} from "./color-space-conversion";
-import { ColorSpace, colorSpace, XYZ_primaries } from "./color-space";
+  ColorSpace,
+  colorSpace,
+  XYZ_primaries,
+  illuminant,
+  Illuminant,
+} from "./color-space";
 
 // itereate through scene meshes and return the mesh instance that matches
 // the provided name, or undefined if none are found
@@ -30,6 +32,14 @@ export function findMaterialByName(
   }
   return undefined;
 }
+function findEntityInList(list: any[], queryName: string): any | undefined {
+  for (let item of list) {
+    if (item.name === queryName) {
+      return item;
+    }
+  }
+  return undefined;
+}
 
 // takes a coordinate in RGB refernce space and projects onto a
 // 3d plane for easier visualization of the chromaticity plot
@@ -47,7 +57,7 @@ export function renderProfileChromaticityPlane(
   scene: Babylon.Scene
 ) {
   if (scene) {
-    const { convertToReferenceSpace, primaries } = colorSpace[colorSpaceName];
+    const { primaries } = colorSpace[colorSpaceName];
 
     // used to define facet triangles to manually render primary points as a polygon
     const facetIndices: number[] = [2, 1, 0]; //[0, 5, 2];
@@ -55,7 +65,8 @@ export function renderProfileChromaticityPlane(
     // get vector positions array in xyY space for all primaries, given a
     // particular color profile array of xyY primaries and xyY whitepoint
     const positions: Array<number> = primaries
-      .map(([x, y]: number[]) => [x - 0.01, y - 0.01, 1 - x - y - 0.01])
+      .map(([x, y]: number[]) => [x, y, 1 - x - y])
+      .map((primary: number[]) => primary.map((c: number) => c - 0.01))
       .flat();
 
     // gathers an array of numbers representing a 4 number pair representing
@@ -66,7 +77,9 @@ export function renderProfileChromaticityPlane(
       XYZ_primaries[4],
     ]
       .map((primary: number[]) =>
-        convertToReferenceSpace(primary, colorSpaceName).concat([1])
+        transformRGBtoXYZ(primary, colorSpaceName, {
+          compand: true,
+        }).concat([1])
       )
       .flat();
 
@@ -220,6 +233,7 @@ Render profile color space in XYZ space
 export function renderColorSpace(
   name: string,
   colorSpaceName: ColorSpace,
+  referenceIlluminant: Illuminant,
   scene: Babylon.Scene
 ) {
   // include black & white points with the 6 primaries
@@ -228,13 +242,18 @@ export function renderColorSpace(
   // positions are calculated by mapping primary points + whitepoint & blackpoint
   // as they are companded from their source color space into reference space
   const positions: number[] = XYZ_positions.map((color: number[]) =>
-    compand_RGB_XYZ_Space(color, colorSpaceName)
+    transformRGBtoXYZ(color, colorSpaceName, {
+      referenceIlluminant: illuminant[referenceIlluminant],
+    })
   ).flat();
 
   // colors must also compand values from source space to reference space but also
   // should apply gamma correction relevant to the profile for accurate color representation
   const colors: number[] = XYZ_positions.map((color: number[]) =>
-    transformXYZtoRGB(color, colorSpaceName).concat([1])
+    transformRGBtoXYZ(color, colorSpaceName, {
+      compand: true,
+      referenceIlluminant: illuminant[referenceIlluminant],
+    }).concat([1])
   ).flat();
 
   // define babylon VertexData to be applied to the 3d box mesh
@@ -282,13 +301,14 @@ export function renderColorSpace(
     );
     mat.emissiveColor = new Babylon.Color3(1, 1, 1);
     mat.useEmissiveAsIllumination = true;
+    mat.alpha = 0.05;
     mat.wireframe = true;
 
     const invisMat: Babylon.StandardMaterial = new Babylon.StandardMaterial(
       "alpha-mat",
       scene
     );
-    invisMat.alpha = 1;
+    invisMat.alpha = 0.1;
 
     // base mesh with vertex data applied
     const mesh: Babylon.Mesh = new Babylon.Mesh(name, scene);
@@ -364,34 +384,42 @@ export function renderColorSpace(
 export function renderRGBPoint(
   rgb_color: number[],
   currentSpace: ColorSpace,
-  scene: Babylon.Scene
-) {
-  const transformFunc: any = colorSpace[currentSpace].convertToReferenceSpace;
-
+  referenceIlluminant: Illuminant,
+  scene: Babylon.Scene,
+  entityRefs?: Array<
+    Babylon.StandardMaterial | Babylon.AbstractMesh | Babylon.TransformNode
+  >
+): Array<
+  Babylon.StandardMaterial | Babylon.AbstractMesh | Babylon.TransformNode
+> {
+  // hold a reference ot entity names to ne used in this render function
   const entityNames: any = {
     transform: "rgb-point-transform",
     material: "rgb-point-material",
     mesh: "rgb-point-mesh",
   };
 
+  console.log(referenceIlluminant);
+
   // derive location in XYZ space of point center
-  const pointPosition: number[] = compand_RGB_XYZ_Space(
-    rgb_color,
-    currentSpace
-  );
-
-  // derive normalized RGB color for the point within the current space
-  const pointColor: number[] = transformRGBtoXYZ(rgb_color, currentSpace);
-
-  // clear transform nodes in scene
-  scene.transformNodes.some((node: Babylon.TransformNode): boolean => {
-    return node.name === entityNames.transform ? (node.dispose(), true) : false;
+  const pointPosition: number[] = transformRGBtoXYZ(rgb_color, currentSpace, {
+    referenceIlluminant: illuminant[referenceIlluminant],
   });
 
+  // derive normalized RGB color for the point within the current space
+  const pointColor: number[] = transformRGBtoXYZ(rgb_color, currentSpace, {
+    compand: true,
+    referenceIlluminant: illuminant[referenceIlluminant],
+  });
+
+  // Create a transform node, or reference one from a provided entity list.
+  // set the transform position based on derived pointPosition.
+  // This ultimately moves the sphere to the proper location within XYZ space
   // create new transform node
-  const transformNode: Babylon.TransformNode = new Babylon.TransformNode(
-    entityNames.transform
-  );
+  const transformNode: Babylon.TransformNode =
+    (entityRefs
+      ? findEntityInList(entityRefs, entityNames.transform)
+      : undefined) || new Babylon.TransformNode(entityNames.transform);
 
   // move the transformation node to align with the updated position
   transformNode.position.x = pointPosition[0];
@@ -399,30 +427,18 @@ export function renderRGBPoint(
   transformNode.position.z = pointPosition[2];
 
   // find the material within the scene if it hasnt yet been created
-  const foundMaterial: Babylon.Material | undefined = findMaterialByName(
-    entityNames.material,
-    scene
-  );
-
-  // and dispose of it if found
-  if (foundMaterial) {
-    foundMaterial.dispose(true, true);
-  }
-
-  // create a new material
-  const material: Babylon.StandardMaterial = new Babylon.StandardMaterial(
-    entityNames.material,
-    scene
-  );
+  const material: Babylon.StandardMaterial =
+    (entityRefs
+      ? findEntityInList(entityRefs, entityNames.material)
+      : undefined) || new Babylon.StandardMaterial(entityNames.material, scene);
 
   // apply the converted color as the material diffuse color
   material.diffuseColor = new Babylon.Color3(...pointColor);
-  console.log(material.diffuseColor);
 
   // search for the existing mesh name if any controls have been updated
   // or create a new one if none are found
-  let mesh: Babylon.AbstractMesh | Babylon.Mesh | undefined =
-    findMeshByName(entityNames.mesh, scene) ||
+  let mesh: Babylon.AbstractMesh | Babylon.Mesh =
+    (entityRefs ? findEntityInList(entityRefs, entityNames.mesh) : undefined) || //findMeshByName(entityNames.mesh, scene) ||
     Babylon.SphereBuilder.CreateSphere(
       entityNames.mesh,
       { diameter: 0.04 },
@@ -432,6 +448,10 @@ export function renderRGBPoint(
   // set mesh properties
   mesh.parent = transformNode;
   mesh.material = material;
+  mesh.useVertexColors = true;
+
+  // return entities for reference in successive calls
+  return [material, mesh, transformNode];
 }
 
 /*
@@ -518,14 +538,21 @@ export function renderLabel(
 }
 
 // render hemisphere light to 3d graphs
-export function renderHemiLight(scene: Babylon.Scene) {
-  // lighting instantitation
-  const light: Babylon.HemisphericLight = new Babylon.HemisphericLight(
-    "hemi1",
-    new Babylon.Vector3(0, 20, 0),
-    scene
-  );
-  light.diffuse = new Babylon.Color3(1, 1, 1);
-  light.groundColor = new Babylon.Color3(1, 1, 1);
-  light.specular = new Babylon.Color3(0, 0, 0);
+export function renderHemiLight(
+  scene: Babylon.Scene,
+  entityRefs?: Array<Babylon.Light>
+): Babylon.Light | void {
+  if (!scene.lights.some((light: Babylon.Light) => light.name === "hemi1")) {
+    // lighting instantitation
+    const light: Babylon.HemisphericLight = new Babylon.HemisphericLight(
+      "hemi1",
+      new Babylon.Vector3(0, 20, 0),
+      scene
+    );
+    light.diffuse = new Babylon.Color3(1, 1, 1);
+    light.groundColor = new Babylon.Color3(1, 1, 1);
+    light.specular = new Babylon.Color3(0, 0, 0);
+
+    return light;
+  }
 }

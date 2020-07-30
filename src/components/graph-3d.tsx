@@ -120,18 +120,18 @@ function renderAxis(
   );
 }
 
+type RenderMethod = (scene: Babylon.Scene) => void;
+
 interface Graph3dProps {
   axisLabels?: Array<string>;
   className?: string;
-  lights?: Array<(scene: Babylon.Scene) => void>;
-  meshes?: Array<(scene: Babylon.Scene) => void>;
+  renderMethods: RenderMethod[];
 }
 
 export function Graph3d({
   axisLabels = [],
   className,
-  lights = [],
-  meshes = [],
+  renderMethods,
 }: Graph3dProps) {
   // component references
   const canvasRef: React.RefObject<HTMLCanvasElement> = useRef(null);
@@ -218,31 +218,21 @@ export function Graph3d({
     }
   });
 
+  // Loop through the renderMethods prop array to invoke rendering functions which
+  // offload the individual rendering responsibilities each function. Pass along
+  // the Babylon.Scene instance to allow those functions to draw items directly within it.
   useEffect(
     function renderGraph() {
-      if (
-        sceneRef.current &&
-        engineRef.current &&
-        cameraRef.current &&
-        canvasRef.current
-      ) {
-        // this should be extracted from this component scope altogether
-        meshes?.forEach((meshRenderFunction: any, index: number) => {
-          if (meshRenderFunction && sceneRef.current) {
-            meshRenderFunction(sceneRef.current);
-          }
+      if (sceneRef.current) {
+        // assign reference to current scene to disambiguate potentiall undefined typing
+        const scene: Babylon.Scene = sceneRef.current;
+        // loop through methods and invoke them, passing along the scene reference
+        renderMethods.forEach((renderMethod: RenderMethod) => {
+          renderMethod(scene);
         });
-        // loop through all light rendering functions to include within scene
-        lights?.forEach(
-          (lightRenderFunction: (scene: Babylon.Scene) => void) => {
-            if (lightRenderFunction && sceneRef.current) {
-              lightRenderFunction(sceneRef.current);
-            }
-          }
-        );
       }
     },
-    [lights, meshes, sceneRef, engineRef, cameraRef, canvasRef]
+    [sceneRef, renderMethods]
   );
 
   return (

@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useState,
-  useRef,
-  useLayoutEffect,
-  useEffect,
-} from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import cx from "classnames";
 import { ValueSlider } from "./value-slider";
 import styles from "./color-component-input.module.scss";
@@ -23,7 +17,7 @@ export function ColorComponent({
   onChange,
 }: ColorComponentProps) {
   // state to carry computed slider offset
-  const [inputValue, setInputValue] = useState<number>(0);
+  const [inputValue, setInputValue] = useState<number>(initialValue);
 
   // input reference object
   const inputRef: React.RefObject<HTMLInputElement> = useRef(null);
@@ -43,17 +37,37 @@ export function ColorComponent({
         let value: number = parseInt(inputRef.current.value) || 0;
 
         // limit the value to within range of min/max
-        value =
-          value < minRange ? minRange : value > maxRange ? maxRange : value;
+        const boundedValue: number = getLimitedValue(value, minRange, maxRange);
 
         // update the element's value that is range capped.
-        inputRef.current.value = String(value);
+        inputRef.current.value = String(boundedValue);
 
         // and store this value in state
-        setInputValue(value);
+        setInputValue(boundedValue);
+
+        if (onChange) onChange(boundedValue);
       }
     },
-    [inputRef, minRange, maxRange]
+    [inputRef, minRange, maxRange, onChange]
+  );
+
+  // callback to handle when the slider position has changed.
+  // value to be reported as a normalized value between 0-1.
+  const sliderChangeHandler = useCallback(
+    (value: number | undefined) => {
+      if (value !== undefined) {
+        let boundedValue: number = getLimitedValue(
+          value * Math.pow(2, 8),
+          minRange,
+          maxRange
+        );
+
+        setInputValue(boundedValue);
+
+        if (onChange) onChange(boundedValue);
+      }
+    },
+    [onChange, minRange, maxRange]
   );
 
   useEffect(() => {
@@ -62,11 +76,7 @@ export function ColorComponent({
     }
   }, [inputRef, initialValue]);
 
-  useEffect(() => {
-    if (onChange && inputValue) {
-      onChange(inputValue);
-    }
-  }, [inputValue, onChange]);
+  //useEffect(()=>{console.log(inputValue)},[inputValue]);
 
   return (
     <div className={containerCx}>
@@ -80,7 +90,12 @@ export function ColorComponent({
       <ValueSlider
         className={styles.slider}
         offset={inputValue / maxRange}
+        onChange={sliderChangeHandler}
       ></ValueSlider>
     </div>
   );
+}
+
+function getLimitedValue(value: number, min: number, max: number) {
+  return value < min ? min : value > max ? max : value;
 }
