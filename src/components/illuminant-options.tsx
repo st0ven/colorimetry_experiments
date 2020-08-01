@@ -1,8 +1,7 @@
-import React from "react"
-import {illuminant, Illuminant} from "../helper/color-space"
+import React from "react";
+import { Illuminant } from "../helper/color-space";
 
 export function IlluminantOptions() {
-	console.log(Illuminant);
   return (
     <React.Fragment>
       {Object.keys(Illuminant).map((targetIlluminant: string) => (

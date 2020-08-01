@@ -1,9 +1,7 @@
-import { transformXYZtoRGB, transformRGBtoXYZ } from "./color-space-conversion";
-
 export enum ColorSpace {
   adobeRGB = "adobeRGB",
   adobeWideGamut = "adobeWideGamut",
-  //appleRGB = "appleRGB",
+  appleRGB = "appleRGB",
   displayP3 = "displayP3",
   proPhoto = "proPhoto",
   sRGB = "sRGB",
@@ -39,8 +37,6 @@ export const illuminant: any = {
 
 export const colorSpace: any = {
   [ColorSpace.adobeRGB]: {
-    convertFromReferenceSpace: transformRGBtoXYZ,
-    convertToReferenceSpace: transformXYZtoRGB,
     depth: 8,
     illuminant: illuminant[Illuminant.D65],
     label: "Adobe RGB 1998",
@@ -49,17 +45,8 @@ export const colorSpace: any = {
       [0.21, 0.71],
       [0.15, 0.06],
     ],
-    transferParams: {
-      alpha: 1,
-      beta: 0,
-      beta_rho: 0,
-      gammaLimit: 563 / 256,
-      gammaLinear: 1.8,
-    },
   },
   [ColorSpace.adobeWideGamut]: {
-    convertFromReferenceSpace: transformRGBtoXYZ,
-    convertToReferenceSpace: transformXYZtoRGB,
     depth: 16,
     illuminant: illuminant[Illuminant.D50],
     label: "Adobe Wide Gamut",
@@ -68,19 +55,9 @@ export const colorSpace: any = {
       [0.1152, 0.8264],
       [0.1566, 0.0177],
     ],
-    transferParams: {
-      alpha: 1,
-      beta: 0,
-      beta_rho: 0,
-      gammaLimit: 536 / 256,
-      gammaLinear: 2.2,
-    },
   },
-  /*
   [ColorSpace.appleRGB]: {
-    convertFromReferenceSpace: (color_xyz: number[], colorSpace: ColorSpace) =>
-      compand_RGB_XYZ_Space(color_xyz, colorSpace, true),
-    convertToReferenceSpace: compand_RGB_XYZ_Space,
+    depth: 16,
     illuminant: illuminant[Illuminant.D65],
     label: "Apple RGB",
     primaries: [
@@ -88,18 +65,8 @@ export const colorSpace: any = {
       [0.28, 0.595],
       [0.155, 0.07],
     ],
-    transferParams: {
-      alpha: 1,
-      beta: 0,
-      beta_rho: 0,
-      gammaLimit: 536 / 256,
-      gammaLinear: 1.8,
-    },
   },
-  */
   [ColorSpace.displayP3]: {
-    convertFromReferenceSpace: transformRGBtoXYZ,
-    convertToReferenceSpace: transformXYZtoRGB,
     depth: 8,
     illuminant: illuminant[Illuminant.D65],
     label: "Display P3",
@@ -108,15 +75,8 @@ export const colorSpace: any = {
       [0.265, 0.69],
       [0.15, 0.06],
     ],
-    transferParams: {
-      alpha: 1.055,
-      gammaLimit: 12 / 5,
-      gammaLinear: 2.2,
-    },
   },
   [ColorSpace.proPhoto]: {
-    convertFromReferenceSpace: transformRGBtoXYZ,
-    convertToReferenceSpace: transformXYZtoRGB,
     depth: 16,
     illuminant: illuminant[Illuminant.D50],
     label: "ProPhoto",
@@ -125,15 +85,8 @@ export const colorSpace: any = {
       [0.159597, 0.840403],
       [0.036598, 0.000105],
     ],
-    transferParams: {
-      alpha: 1,
-      gammaLimit: 9 / 5,
-      gammaLinear: 2.2,
-    },
   },
   [ColorSpace.sRGB]: {
-    convertFromReferenceSpace: transformRGBtoXYZ,
-    convertToReferenceSpace: transformXYZtoRGB,
     depth: 8,
     illuminant: illuminant[Illuminant.D65],
     label: "sRGB",
@@ -142,13 +95,6 @@ export const colorSpace: any = {
       [0.3, 0.6],
       [0.15, 0.06],
     ],
-    transferParams: {
-      alpha: 1.055,
-      beta: 0.0031308,
-      beta_rho: 0.04045,
-      gammaLimit: 12 / 5,
-      gammaLinear: 2.2,
-    },
   },
 };
 

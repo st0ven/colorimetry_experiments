@@ -1,25 +1,23 @@
 import React, { useRef, useState, useCallback } from "react";
 import * as Babylon from "babylonjs";
-import styles from "./rgb-selector-3d.module.scss";
+import styles from "./rgb-visualization.module.scss";
 import { Graph3d } from "../components/graph-3d";
+import { Select } from "../components/select";
 import { ColorSpaceOptions } from "../components/color-space-options";
 import { IlluminantOptions } from "../components/illuminant-options";
 import { ColorComponent } from "../components/color-component-input";
 import { ColorSpace, Illuminant } from "../helper/color-space";
-import {
-  renderHemiLight,
-  renderColorSpace,
-  renderRGBPoint,
-} from "../helper/babylon-render";
+import { renderHemiLight } from "../rendering/lights";
+import { renderColorSpace, renderRGBPoint } from "../rendering/rgb-color-space";
 
-export function RGBSelector3D() {
+export function RGBVisualization() {
   // reference collection of scene entities relevant to this visualization
   const sceneEntities: React.MutableRefObject<Array<any>> = useRef<Array<any>>(
     []
   );
 
   // stateful variables relating to user input
-  const [currentSpace, setCurrentSpace] = useState<string>(ColorSpace.sRGB);
+  const [toColorSpace, setColorSpace] = useState<string>(ColorSpace.sRGB);
   const [redComponent, setRedComponent] = useState<number>(1);
   const [greenComponent, setGreenComponent] = useState<number>(1);
   const [blueComponent, setBlueComponent] = useState<number>(1);
@@ -31,7 +29,7 @@ export function RGBSelector3D() {
   const changeProfileForColorSpace = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
-      setCurrentSpace(value);
+      setColorSpace(value);
     },
     []
   );
@@ -70,7 +68,7 @@ export function RGBSelector3D() {
       // invoke the rendering method to draw a point indicator
       const returnedEntities: any[] = renderRGBPoint(
         [redComponent, greenComponent, blueComponent],
-        Object(ColorSpace)[currentSpace],
+        Object(ColorSpace)[toColorSpace],
         Object(Illuminant)[referenceIlluminant],
         scene,
         sceneEntities.current
@@ -83,7 +81,7 @@ export function RGBSelector3D() {
       redComponent,
       greenComponent,
       blueComponent,
-      currentSpace,
+      toColorSpace,
       referenceIlluminant,
       registerEntities,
       sceneEntities,
@@ -95,39 +93,43 @@ export function RGBSelector3D() {
     (scene: Babylon.Scene) => {
       renderColorSpace(
         "color-space",
-        Object(ColorSpace)[currentSpace],
+        Object(ColorSpace)[toColorSpace],
         Object(Illuminant)[referenceIlluminant],
         scene
       );
     },
-    [currentSpace, referenceIlluminant]
+    [toColorSpace, referenceIlluminant]
   );
 
   // render the container
   return (
     <React.Fragment>
-      <label htmlFor={`space options`}>source color space</label>
-      <select
-        id={`space options`}
-        className={styles.colorSpaceSelector}
-        onChange={changeProfileForColorSpace}
-        defaultValue={currentSpace}
-      >
-        <ColorSpaceOptions />
-      </select>
-      <label htmlFor={`illuminant options`}>reference white point</label>
-      <select
-        id={`illuminant options`}
-        className={styles.colorSpaceSelector}
-        onChange={changeReferenceIlluminant}
-        defaultValue={referenceIlluminant}
-      >
-        <IlluminantOptions />
-      </select>
+      <header className={styles.header}>
+        <Select
+          className={styles.colorSpaceSelector}
+          onChange={changeProfileForColorSpace}
+          id="space options"
+          label="color space"
+          initialValue={toColorSpace}
+        >
+          <ColorSpaceOptions />
+        </Select>
+        <Select
+          className={styles.colorSpaceSelector}
+          onChange={changeReferenceIlluminant}
+          id="illuminant options"
+          label="reference illuminant"
+          initialValue={referenceIlluminant}
+        >
+          <IlluminantOptions />
+        </Select>
+      </header>
+
       <Graph3d
         className={styles.bottomSpacer}
         renderMethods={[renderHemiLight, renderColorSpaceMesh, renderPointMesh]}
       ></Graph3d>
+      
       <ColorComponent
         className={styles.colorComponent}
         initialValue={Math.round(redComponent * 255)}

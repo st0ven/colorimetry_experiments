@@ -1,0 +1,23 @@
+.select {
+	display: flex;
+	flex-direction: column;
+
+	label{
+		margin-bottom: 0.33rem;
+		opacity: 1;
+		font-size: 0.875rem;
+		font-weight: 700;
+	}
+
+	label, select{
+		display: block;
+	}
+
+	select {
+		height: 2rem;
+		padding: 0 0.5rem;
+		box-sizing: border-box;
+		font-size: 0.875rem;
+		opacity: 0.6;
+	}
+}

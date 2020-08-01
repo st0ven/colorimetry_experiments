@@ -76,8 +76,6 @@ export function ColorComponent({
     }
   }, [inputRef, initialValue]);
 
-  //useEffect(()=>{console.log(inputValue)},[inputValue]);
-
   return (
     <div className={containerCx}>
       <input
