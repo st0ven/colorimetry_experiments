@@ -1,3 +1,5 @@
+import { GraphType } from "src/components/graph-3d";
+
 export enum ColorSpace {
   adobeRGB = "adobeRGB",
   adobeWideGamut = "adobeWideGamut",
@@ -21,6 +23,18 @@ export enum Illuminant {
   F11 = "F11",
 }
 
+export enum RenderSpace {
+  XYZ = "XYZ",
+  LCHuv = "LCHuv",
+}
+
+export const renderSpace: any = {
+  [RenderSpace.LCHuv]: { graphType: GraphType.cylindrical },
+  [RenderSpace.XYZ]: {
+    graphType: GraphType.box,
+  },
+};
+
 export const illuminant: any = {
   [Illuminant.A]: [1.0985, 1, 0.35585],
   [Illuminant.B]: [0.99072, 1, 0.85223],
@@ -38,7 +52,7 @@ export const illuminant: any = {
 export const colorSpace: any = {
   [ColorSpace.adobeRGB]: {
     depth: 8,
-    illuminant: illuminant[Illuminant.D65],
+    illuminant: Illuminant.D65,
     label: "Adobe RGB 1998",
     primaries: [
       [0.64, 0.33],
@@ -48,7 +62,7 @@ export const colorSpace: any = {
   },
   [ColorSpace.adobeWideGamut]: {
     depth: 16,
-    illuminant: illuminant[Illuminant.D50],
+    illuminant: Illuminant.D50,
     label: "Adobe Wide Gamut",
     primaries: [
       [0.7347, 0.2653],
@@ -58,7 +72,7 @@ export const colorSpace: any = {
   },
   [ColorSpace.appleRGB]: {
     depth: 16,
-    illuminant: illuminant[Illuminant.D65],
+    illuminant: Illuminant.D65,
     label: "Apple RGB",
     primaries: [
       [0.625, 0.34],
@@ -68,7 +82,7 @@ export const colorSpace: any = {
   },
   [ColorSpace.displayP3]: {
     depth: 8,
-    illuminant: illuminant[Illuminant.D65],
+    illuminant: Illuminant.D65,
     label: "Display P3",
     primaries: [
       [0.68, 0.32],
@@ -78,7 +92,7 @@ export const colorSpace: any = {
   },
   [ColorSpace.proPhoto]: {
     depth: 16,
-    illuminant: illuminant[Illuminant.D50],
+    illuminant: Illuminant.D50,
     label: "ProPhoto",
     primaries: [
       [0.734699, 0.265301],
@@ -88,7 +102,7 @@ export const colorSpace: any = {
   },
   [ColorSpace.sRGB]: {
     depth: 8,
-    illuminant: illuminant[Illuminant.D65],
+    illuminant: Illuminant.D65,
     label: "sRGB",
     primaries: [
       [0.64, 0.33],

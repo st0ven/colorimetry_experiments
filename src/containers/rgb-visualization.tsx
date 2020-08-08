@@ -1,43 +1,91 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./rgb-visualization.module.scss";
-import { Graph3d } from "../components/graph-3d";
+import { Graph3d, GraphType, GraphAxisOptions } from "../components/graph-3d";
 import { Select } from "../components/select";
-import { ColorSpaceOptions } from "../components/color-space-options";
+import {
+  ColorSpaceOptions,
+  RenderSpaceOptions,
+} from "../components/color-space-options";
 import { IlluminantOptions } from "../components/illuminant-options";
 import { ColorComponent } from "../components/color-component-input";
-import { ColorSpace, Illuminant } from "../helper/color-space";
+import { ColorSpace, Illuminant, RenderSpace } from "../helper/color-space";
 import { renderHemiLight } from "../rendering/lights";
-import { renderColorSpace, renderRGBPoint } from "../rendering/rgb-color-space";
+import {
+  renderColorSpace,
+  renderRGBPoint,
+  renderRGBinLUV,
+} from "../rendering/rgb-color-space";
+import { AxisRenderOptions } from "src/rendering/axes";
+
+const axisOptionsL: AxisRenderOptions = {
+  scalarMin: 0,
+  scalarMax: 100,
+  markers: 4,
+  floatPoint: 0,
+  axisLabel: "L",
+  axisOrigin: new Babylon.Vector3(0, 0, 1),
+};
+
+const axisOptionsC: AxisRenderOptions = {
+  axisLabel: "C",
+  markers: 4,
+  max: 1,
+  floatPoint: 0,
+  scalarMin: 0,
+  scalarMax: 200,
+};
+
+const axisOptionsH: AxisRenderOptions = {
+  axisLabel: "h",
+  markers: 18,
+  radius: 1,
+};
+
+const cylindricalAxesOptions: GraphAxisOptions = {
+  axisOptionsX: axisOptionsH,
+  axisOptionsY: axisOptionsL,
+  axisOptionsZ: axisOptionsC,
+};
 
 export function RGBVisualization() {
-  // reference collection of scene entities relevant to this visualization
-  const sceneEntities: React.MutableRefObject<Array<any>> = useRef<Array<any>>(
-    []
-  );
-
-  // stateful variables relating to user input
-  const [toColorSpace, setColorSpace] = useState<string>(ColorSpace.sRGB);
+  // hold state for RGB color inputs
   const [redComponent, setRedComponent] = useState<number>(1);
   const [greenComponent, setGreenComponent] = useState<number>(1);
   const [blueComponent, setBlueComponent] = useState<number>(1);
-  const [referenceIlluminant, setReferenceIlluminant] = useState<string>(
-    Illuminant.D50
+
+  // hold state for source & reference color space / illuminant options
+  const [toColorSpace, setColorSpace] = useState<ColorSpace>(ColorSpace.sRGB);
+  const [toReferenceSpace, setReferenceSpace] = useState<RenderSpace>(
+    RenderSpace.LCHuv
+  );
+  const [referenceIlluminant, setReferenceIlluminant] = useState<Illuminant>(
+    Illuminant.D65
   );
 
   // update the state to reflect the selection of which color profile to visualize
-  const changeProfileForColorSpace = useCallback(
+  const changeSourceSpace = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
-      setColorSpace(value);
+      setColorSpace(Object(ColorSpace)[value]);
     },
     []
   );
 
+  // update the reference illuminant to be used to calculate color transforms
+  // to the reference space
   const changeReferenceIlluminant = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
-      setReferenceIlluminant(value);
+      setReferenceIlluminant(Object(Illuminant)[value]);
+    },
+    []
+  );
+
+  const changeReferenceSpace = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const { value } = event.target;
+      setReferenceSpace(Object(RenderSpace)[value]);
     },
     []
   );
@@ -55,44 +103,42 @@ export function RGBVisualization() {
     setBlueComponent(value / 255);
   }, []);
 
-  const registerEntities = useCallback(
-    (entities: any | any[]) => {
-      sceneEntities.current = sceneEntities.current.concat(entities);
-    },
-    [sceneEntities]
-  );
-
   // render a single point as a sphere within the visualization
   const renderPointMesh = useCallback(
     (scene: Babylon.Scene) => {
-      // invoke the rendering method to draw a point indicator
-      const returnedEntities: any[] = renderRGBPoint(
+      renderRGBPoint(
         [redComponent, greenComponent, blueComponent],
         Object(ColorSpace)[toColorSpace],
+        RenderSpace[toReferenceSpace],
         Object(Illuminant)[referenceIlluminant],
-        scene,
-        sceneEntities.current
+        scene
       );
-
-      // register any entities created to the list of entity references array
-      if (!sceneEntities.current.length) registerEntities(returnedEntities);
     },
     [
       redComponent,
       greenComponent,
       blueComponent,
       toColorSpace,
+      toReferenceSpace,
       referenceIlluminant,
-      registerEntities,
-      sceneEntities,
     ]
   );
 
+  const renderLchhMesh = useCallback(
+    (scene: Babylon.Scene) => {
+      renderRGBinLUV(
+        Object(ColorSpace)[toColorSpace],
+        referenceIlluminant,
+        scene
+      );
+    },
+    [referenceIlluminant, toColorSpace]
+  );
+
   // render the color space mesh given a selected color space
-  const renderColorSpaceMesh = useCallback(
+  const renderXyzMesh = useCallback(
     (scene: Babylon.Scene) => {
       renderColorSpace(
-        "color-space",
         Object(ColorSpace)[toColorSpace],
         Object(Illuminant)[referenceIlluminant],
         scene
@@ -107,7 +153,7 @@ export function RGBVisualization() {
       <header className={styles.header}>
         <Select
           className={styles.colorSpaceSelector}
-          onChange={changeProfileForColorSpace}
+          onChange={changeSourceSpace}
           id="space options"
           label="color space"
           initialValue={toColorSpace}
@@ -123,13 +169,38 @@ export function RGBVisualization() {
         >
           <IlluminantOptions />
         </Select>
+        <Select
+          className={styles.colorSpaceSelector}
+          onChange={changeReferenceSpace}
+          id="destination space"
+          label="render space"
+          initialValue={toReferenceSpace}
+        >
+          <RenderSpaceOptions />
+        </Select>
       </header>
 
       <Graph3d
+        type={
+          toReferenceSpace === RenderSpace.LCHuv
+            ? GraphType.cylindrical
+            : GraphType.box
+        }
+        axisOptions={
+          toReferenceSpace === RenderSpace.LCHuv
+            ? cylindricalAxesOptions
+            : undefined
+        }
         className={styles.bottomSpacer}
-        renderMethods={[renderHemiLight, renderColorSpaceMesh, renderPointMesh]}
+        renderMethods={[
+          renderHemiLight,
+          toReferenceSpace === RenderSpace.LCHuv
+            ? renderLchhMesh
+            : renderXyzMesh,
+          renderPointMesh,
+        ]}
       ></Graph3d>
-      
+
       <ColorComponent
         className={styles.colorComponent}
         initialValue={Math.round(redComponent * 255)}

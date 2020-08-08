@@ -1,35 +1,38 @@
-import React, { useRef, useEffect, useLayoutEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState } from "react";
 import cx from "classnames";
 import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import {
-  Axis,
   AxisRenderOptions,
-  renderAxis,
+  renderAxes,
 } from "../rendering/axes";
-
-// render base axial guidelines
-const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorY: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorZ: Babylon.Vector3 = new Babylon.Vector3(1, 0, 0);
 
 type RenderMethod = (scene: Babylon.Scene) => void;
 
-// 3D Graph Component Props
-interface Graph3dProps {
-  className?: string;
-  renderMethods: RenderMethod[];
+export enum GraphType {
+  box = "box",
+  cylindrical = "cylindrical",
+}
+
+export interface GraphAxisOptions {
   axisOptionsX?: AxisRenderOptions;
   axisOptionsY?: AxisRenderOptions;
   axisOptionsZ?: AxisRenderOptions;
 }
 
+// 3D Graph Component Props
+interface Graph3dProps {
+  className?: string;
+  renderMethods: RenderMethod[];
+  axisOptions?: GraphAxisOptions;
+  type: GraphType;
+}
+
 export function Graph3d({
-  axisOptionsX = {},
-  axisOptionsY = {},
-  axisOptionsZ = {},
   className,
   renderMethods,
+  type,
+  axisOptions,
 }: Graph3dProps) {
   // component references
   const canvasRef: React.RefObject<HTMLCanvasElement> = useRef(null);
@@ -41,21 +44,9 @@ export function Graph3d({
   > = useRef();
   const sceneRef: React.MutableRefObject<Babylon.Scene | undefined> = useRef();
 
-  // mix in axis specific options to the shared option parameters
-  const combinedAxisOptionsX: AxisRenderOptions = {
-    ...axisOptionsX,
-    markerVector: axisMarkerVectorX,
-  };
-
-  const combinedAxisOptionsY: AxisRenderOptions = {
-    ...axisOptionsY,
-    markerVector: axisMarkerVectorY,
-  };
-
-  const combinedAxisOptionsZ: AxisRenderOptions = {
-    ...axisOptionsZ,
-    markerVector: axisMarkerVectorZ,
-  };
+  const [axesParentNode, setAxesParentNode] = useState<
+    Babylon.Nullable<Babylon.Node>
+  >(null);
 
   // apply a classname optionally to the graph wrapper
   const graphCx: string = cx(styles.graph3d, className);
@@ -71,10 +62,12 @@ export function Graph3d({
       // initialize all Babylon related refs required to render a scene
       engineRef.current = new Babylon.Engine(canvasRef.current, true, {}, true);
 
+      // create scene instance and set some initial properties
       sceneRef.current = new Babylon.Scene(engineRef.current);
       sceneRef.current.shadowsEnabled = false;
       sceneRef.current.clearColor = new Babylon.Color4(0.05, 0.03, 0.15, 1);
 
+      // create scene camera and point it to origin/center
       cameraRef.current = new Babylon.ArcRotateCamera(
         "camera",
         Math.PI / 4,
@@ -95,10 +88,6 @@ export function Graph3d({
       // attach camera controls to the canvas
       cameraRef.current.attachControl(canvasRef.current, true);
 
-      renderAxis(Axis.X, combinedAxisOptionsX, sceneRef.current);
-      renderAxis(Axis.Y, combinedAxisOptionsY, sceneRef.current);
-      renderAxis(Axis.Z, combinedAxisOptionsZ, sceneRef.current);
-
       // render loop to allow interactivity
       engineRef.current.runRenderLoop(() => {
         sceneRef.current?.render(true);
@@ -106,11 +95,27 @@ export function Graph3d({
     }
   });
 
+  useEffect(() => {
+    const scene: Babylon.Scene | undefined = sceneRef.current;
+    const camera: Babylon.ArcRotateCamera | undefined = cameraRef.current;
+
+    if (scene && camera) {
+      const parentNode: Babylon.Node =
+        axesParentNode || new Babylon.Node("axes-parent-node", scene);
+
+      parentNode.dispose();
+
+      renderAxes(type, scene, parentNode, axisOptions)
+
+      setAxesParentNode(parentNode);
+    }
+  }, [axisOptions, type, cameraRef, sceneRef]);
+
   // Loop through the renderMethods prop array to invoke rendering functions which
   // offload the individual rendering responsibilities each function. Pass along
   // the Babylon.Scene instance to allow those functions to draw items directly within it.
   useEffect(
-    function renderGraph() {
+    function renderEntities() {
       if (sceneRef.current) {
         // assign reference to current scene to disambiguate potentiall undefined typing
         const scene: Babylon.Scene = sceneRef.current;
@@ -132,3 +137,8 @@ export function Graph3d({
     ></canvas>
   );
 }
+
+// set component default props
+Graph3d.defaultProps = {
+  type: GraphType.box,
+};

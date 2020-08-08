@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, ChangeEvent } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./chromaticity-visualization.module.scss";
 import { ColorSpace } from "../helper/color-space";
-import { Graph3d } from "../components/graph-3d";
+import { Graph3d, GraphType } from "../components/graph-3d";
 import { Select } from "../components/select";
 import { ColorSpaceOptions } from "../components/color-space-options";
 import { findEntityInList } from "../helper/babylon-entities";
@@ -73,6 +73,7 @@ export function ChromaticityVisualization() {
       </header>
 
       <Graph3d
+        type={GraphType.box}
         renderMethods={[
           renderHemiLight,
           render_spectral_locus,

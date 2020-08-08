@@ -37,7 +37,8 @@ export function renderLabel(
     textureWidth = 240,
     textureHeight = 240,
   }: RenderLabelOptions,
-  scene: Babylon.Scene
+  scene: Babylon.Scene,
+  parentNode: Babylon.Nullable<Babylon.Node> = null
 ) {
   // construct label mesh
   const mesh = Babylon.MeshBuilder.CreatePlane(
@@ -81,6 +82,7 @@ export function renderLabel(
   mesh.position = position.scale(positionScale);
   mesh.scaling = new Babylon.Vector3(scale, scale, scale);
   mesh.billboardMode = Babylon.Mesh.BILLBOARDMODE_ALL;
+  mesh.parent = parentNode;
 
   // apply material to mesh
   mesh.material = material;
