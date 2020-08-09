@@ -23,14 +23,17 @@ export enum Illuminant {
   F11 = "F11",
 }
 
-export enum RenderSpace {
-  XYZ = "XYZ",
+export enum ReferenceSpace {
   LCHuv = "LCHuv",
+  LUV = "LUV",
+  RGB = "RGB",
+  XYZ = "XYZ",
+  xyY = "xyY",
 }
 
-export const renderSpace: any = {
-  [RenderSpace.LCHuv]: { graphType: GraphType.cylindrical },
-  [RenderSpace.XYZ]: {
+export const referenceSpace: any = {
+  [ReferenceSpace.LCHuv]: { graphType: GraphType.cylindrical },
+  [ReferenceSpace.XYZ]: {
     graphType: GraphType.box,
   },
 };

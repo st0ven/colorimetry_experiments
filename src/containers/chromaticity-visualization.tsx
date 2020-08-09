@@ -5,7 +5,6 @@ import { ColorSpace } from "../helper/color-space";
 import { Graph3d, GraphType } from "../components/graph-3d";
 import { Select } from "../components/select";
 import { ColorSpaceOptions } from "../components/color-space-options";
-import { findEntityInList } from "../helper/babylon-entities";
 import { renderHemiLight } from "../rendering/lights";
 import {
   renderChromaticityPlane,
@@ -23,11 +22,6 @@ function render_spectral_locus(scene: Babylon.Scene) {
 }
 
 export function ChromaticityVisualization() {
-  // reference to list of meshes used within the visualization's scene
-  const entities: React.MutableRefObject<Array<
-    Babylon.Mesh | Babylon.StandardMaterial
-  >> = useRef([]);
-
   // hold state for the selected color spaces across our demo 3d graphs
   const [toColorSpace, setColorSpace] = useState<ColorSpace>(ColorSpace.sRGB);
 
@@ -43,17 +37,7 @@ export function ChromaticityVisualization() {
 
   const renderChromaticityPlaneMesh = useCallback(
     (scene: Babylon.Scene) => {
-      const newEntities: any = renderChromaticityPlane(
-        Object(ColorSpace)[toColorSpace],
-        scene,
-        entities.current
-      );
-      newEntities.forEach(
-        (newEntity: Babylon.Mesh | Babylon.StandardMaterial) => {
-          if (!findEntityInList(entities.current, newEntity.name))
-            entities.current.push(newEntity);
-        }
-      );
+      renderChromaticityPlane(Object(ColorSpace)[toColorSpace], scene);
     },
     [toColorSpace]
   );

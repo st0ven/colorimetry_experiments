@@ -1,5 +1,5 @@
 import React from "react";
-import { ColorSpace, RenderSpace, colorSpace } from "../helper/color-space";
+import { ColorSpace, ReferenceSpace, colorSpace } from "../helper/color-space";
 
 // populate a list of color space options within an <Option> tag as mapped
 // against the keys of the ColorSpace enum
@@ -15,12 +15,12 @@ export function ColorSpaceOptions() {
   );
 }
 
-export function RenderSpaceOptions() {
+export function ReferenceSpaceOptions() {
   return (
     <React.Fragment>
-      {Object.keys(RenderSpace).map((renderSpace: string) => (
-        <option key={`option-${renderSpace}`} value={renderSpace}>
-          {Object(RenderSpace)[renderSpace]}
+      {Object.keys(ReferenceSpace).map((space: string) => (
+        <option key={`option-${space}`} value={space}>
+          {Object(ReferenceSpace)[space]}
         </option>
       ))}
     </React.Fragment>

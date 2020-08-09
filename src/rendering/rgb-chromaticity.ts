@@ -1,56 +1,58 @@
 import * as Babylon from "babylonjs";
-import { ColorSpace, XYZ_primaries } from "../helper/color-space";
-import { findMeshByName, findEntityInList } from "../helper/babylon-entities";
 import { RenderLabelOptions, renderLabel } from "../rendering/billboards";
 import {
-  get_xyY_projection,
+  ColorSpace,
+  ReferenceSpace,
+  XYZ_primaries,
+  Illuminant,
+} from "../helper/color-space";
+import {
+  project_XYZ_to_xyY,
   normalizeColor,
-  transformRGBtoXYZ,
-  XYZ_to_xyY,
-} from "../helper/color-space-conversion";
+  Transform,
+  expandRgbColor,
+} from "../helper/transformations";
 
 /*
 Render color profile planes projected into xyY space
 */
 export function renderChromaticityPlane(
   colorSpace: ColorSpace,
-  scene: Babylon.Scene,
-  entities?: Array<Babylon.Mesh | Babylon.StandardMaterial>
-): Array<Babylon.Mesh | Babylon.StandardMaterial> {
+  scene: Babylon.Scene
+) {
   // define names of scene entities
   const meshName: string = "chromaticity-plane";
   const materialName: string = `${meshName}-material`;
 
-  // used to define facet triangles to manually render primary points as a polygon
-  const facetIndices: number[] = [4, 2, 0];
-
   // get vector positions array in xyY space for all primaries, given a
   // particular color profile array of xyY primaries and xyY whitepoint
-  const positions: Array<number> = XYZ_primaries.map((primary: number[]) =>
-    transformRGBtoXYZ(primary, colorSpace, { compand: false })
-  )
-    .map(XYZ_to_xyY)
-    .map(get_xyY_projection)
-    .map((primary: number[]) => primary.map((c: number) => c - 0.01))
-    .flat();
+  const positions: number[][] = XYZ_primaries.map((primary: number[]) =>
+    // project the XYZ coordinates to xyY in 3d space
+    project_XYZ_to_xyY(
+      // transform the primary to xyY space using XYZ as an intermediary
+      Transform(ReferenceSpace.RGB).to(ReferenceSpace.xyY)(
+        // convert normalized range of color to bitwise color
+        expandRgbColor(primary),
+        colorSpace
+      )
+    )
+      // offset the points so that it does not overlap witht he locus line
+      .map((c: number) => c - 0.01)
+  );
 
   // gathers an array of numbers representing a 4 number pair representing
   // r, g, b & a values of a Babylon.Color4 object.
   const colors: number[] = XYZ_primaries.map((primary: number[]) =>
-    transformRGBtoXYZ(primary, colorSpace, {
-      compand: true,
-    }).concat([1])
-  ).flat();
-
-  // instantiate vertexData which will map to a mesh to manually build Babylon polygon
-  const vertexData: Babylon.VertexData = new Babylon.VertexData();
-  vertexData.positions = positions;
-  vertexData.colors = colors;
-  vertexData.indices = facetIndices;
+    Transform(ReferenceSpace.RGB)
+      .to(ReferenceSpace.XYZ)(expandRgbColor(primary), colorSpace, {
+        compand: true,
+      })
+      .concat([1])
+  );
 
   // instantiate material for rendering effect
   const material: Babylon.StandardMaterial =
-    findEntityInList(entities, materialName) ||
+    (scene.getMaterialByName(materialName) as Babylon.StandardMaterial) ||
     new Babylon.StandardMaterial(materialName, scene);
 
   // show backside of mesh
@@ -58,16 +60,20 @@ export function renderChromaticityPlane(
 
   // createa a new mesh as none with this name have been found
   const mesh: Babylon.Mesh =
-    findEntityInList(entities, meshName) || new Babylon.Mesh(meshName, scene);
+    (scene.getMeshByName(meshName) as Babylon.Mesh) ||
+    new Babylon.Mesh(meshName, scene);
 
   // apply the material to mesh
   mesh.material = material;
 
+  // instantiate vertexData which will map to a mesh to manually build Babylon polygon
+  const vertexData: Babylon.VertexData = new Babylon.VertexData();
+  vertexData.positions = positions.flat();
+  vertexData.colors = colors.flat();
+  vertexData.indices = [4, 2, 0];
+
   // apply vertextData to mesh to render polygon
   vertexData.applyToMesh(mesh, true);
-
-  // return scene entities to be captured for later reference
-  return [mesh, material];
 }
 
 /*
@@ -82,7 +88,7 @@ export function renderSpectralLocusXYZ(
 
   // The spectral locus is a static element and only needs to be rendered once.
   // Only proceed to render if an instance cannot be found in the scene.
-  if (!findMeshByName(meshName, scene)) {
+  if (!scene.getMeshByName(meshName)) {
     const spectralMin: number = 390;
     const spectralMax: number = 700;
     const wavelengthDelta: number = 0.1;
@@ -118,6 +124,15 @@ export function renderSpectralLocusXYZ(
     // configure label rendering options
     const labelOptions: RenderLabelOptions = getLabelOptions(labelSize);
 
+    // Build the main locus curve mesh into the scene
+    Babylon.MeshBuilder.CreateLines(
+      meshName,
+      {
+        points: XYZ_locus_curve.getCurve(),
+      },
+      scene
+    );
+
     // iterate through each curve point to render wavelength markers
     // along the path. Markers are placed with prejudice for legibility.
     XYZ_locus_curve.getCurve().forEach(function renderSpectralLocusMarker(
@@ -150,18 +165,12 @@ export function renderSpectralLocusXYZ(
         renderLabel(`${lambda}nm`, markerVector, labelOptions, scene);
       }
     });
-
-    // Build the main locus curve mesh into the scene
-    Babylon.MeshBuilder.CreateLines(
-      meshName,
-      {
-        points: XYZ_locus_curve.getCurve(),
-      },
-      scene
-    );
   }
 }
 
+// generator to fill in label options within the locus and provides
+// a parameter to control for font-size between different invocations
+// required within this working file.
 function getLabelOptions(labelSize: number): RenderLabelOptions {
   return {
     fontSize: 160,
