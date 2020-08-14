@@ -18,11 +18,8 @@ export function ColorSpaceOptions() {
 export function ReferenceSpaceOptions() {
   return (
     <React.Fragment>
-      {Object.keys(ReferenceSpace).map((space: string) => (
-        <option key={`option-${space}`} value={space}>
-          {Object(ReferenceSpace)[space]}
-        </option>
-      ))}
+      <option value={ReferenceSpace.LCHuv}>{ReferenceSpace.LCHuv}</option>
+      <option value={ReferenceSpace.XYZ}>{ReferenceSpace.XYZ}</option>
     </React.Fragment>
   );
 }

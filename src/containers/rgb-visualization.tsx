@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./rgb-visualization.module.scss";
 import { Graph3d, GraphType, GraphAxisOptions } from "../components/graph-3d";
@@ -16,8 +16,15 @@ import {
   renderRGBPoint,
   renderRGBinLUV,
 } from "../rendering/rgb-color-space";
-import { generate_RGB_vertices } from "../helper/vertices";
+import {
+  getBoxGeometry,
+  mapPositionFromVertex,
+  getPolarCoordinatesFor,
+  mapFacetsFromVertex,
+  mapColorFromVertex,
+} from "../helper/vertices";
 import { AxisRenderOptions } from "src/rendering/axes";
+import { normalizeLchColor, expandRgbColor } from "../helper/transformations";
 
 const axisOptionsL: AxisRenderOptions = {
   scalarMin: 0,
@@ -50,6 +57,16 @@ const cylindricalAxesOptions: GraphAxisOptions = {
 };
 
 export function RGBVisualization() {
+  (async function asyncTest() {
+    const response = await fetch("/transform/");
+    //const body = await response.json();
+    console.log(response);
+    if (response.status === 200) {
+      //onsole.log(response.body);
+    } else {
+      //throw Error(response);
+    }
+  })();
   // hold state for RGB color inputs
   const [redComponent, setRedComponent] = useState<number>(1);
   const [greenComponent, setGreenComponent] = useState<number>(1);
@@ -58,23 +75,94 @@ export function RGBVisualization() {
   // hold state for source & reference color space / illuminant options
   const [toColorSpace, setColorSpace] = useState<ColorSpace>(ColorSpace.sRGB);
   const [toReferenceSpace, setReferenceSpace] = useState<ReferenceSpace>(
-    ReferenceSpace.RGB
+    ReferenceSpace.XYZ
   );
   const [referenceIlluminant, setReferenceIlluminant] = useState<Illuminant>(
     Illuminant.D65
   );
 
   // other controls to store in state
-  const [meshDivisions, setMeshDivisions] = useState<number>(1);
+  const [meshDivisions, setMeshDivisions] = useState<number>(16);
+  const [useGeometry, setGeometry] = useState<Babylon.VertexData>(
+    new Babylon.VertexData()
+  );
 
   // gather vertices representing perimeter points of a color space represented
   // as rgb pairs segmented into paths.
   const meshGeometryVertices: number[][][] = useMemo((): number[][][] => {
-    return generate_RGB_vertices({
-      divisions: meshDivisions,
-      bitDepth: 8,
-    });
-  }, []);
+    return getBoxGeometry(meshDivisions);
+  }, [meshDivisions]);
+
+  // memoize the geometry in the form of vertex data to be passed to each
+  // render function. This data is dependent on a number of user-defined variables.
+  const meshVertexData: Babylon.VertexData = useMemo(() => {
+    // create vertex data and subsequent lists to store necessary data.
+    const vertexData: Babylon.VertexData = new Babylon.VertexData();
+    const positions: number[][] = [];
+    const indices: number[][] = [];
+    const colors: number[][] = [];
+
+    // quick alias to the total vert count of the geometry.
+    const totalVerts: number = meshGeometryVertices.length;
+
+    // determine what params to push along with the trannsformation method
+    const transformParams: any[] =
+      toReferenceSpace === ReferenceSpace.LCHuv
+        ? [toColorSpace, referenceIlluminant]
+        : [toColorSpace, { referenceIlluminant }];
+
+    for (let i: number = 0; i < totalVerts; i++) {
+      // set reference to the path within the vertex data
+      let plane: number[][] = meshGeometryVertices[i];
+      let pathLength: number = Math.sqrt(plane.length);
+
+      for (let j: number = 0; j < plane.length; j++) {
+        // reference to this vertex to transform
+        let vertex: number[] = plane[j];
+
+        // expand range from normalized geometry data to RGB
+        let rgbColor: number[] = expandRgbColor(vertex);
+
+        // transforms the vertex to a position in XYZ space
+        let position: number[] = mapPositionFromVertex(
+          rgbColor,
+          ReferenceSpace.RGB,
+          toReferenceSpace,
+          transformParams
+        );
+
+        // polar coordinate color spaces need an additional mapping transformation
+        positions.push(
+          toReferenceSpace === ReferenceSpace.LCHuv
+            ? getPolarCoordinatesFor(normalizeLchColor(position))
+            : position
+        );
+
+        // calculate indices algorithmically and push to list
+        if (plane[j + pathLength] && j % pathLength < pathLength - 1) {
+          indices.push(mapFacetsFromVertex(i * plane.length + j, pathLength));
+        }
+
+        // map colors to positions and push to list
+        colors.push(
+          mapColorFromVertex(rgbColor, toColorSpace, referenceIlluminant)
+        );
+      }
+    }
+
+    // append all lists to the vertexData object, flattened
+    vertexData.positions = positions.flat();
+    vertexData.indices = indices.flat();
+    vertexData.colors = colors.flat();
+
+    // assign the vertex data to be memoized
+    return vertexData;
+  }, [
+    meshGeometryVertices,
+    toColorSpace,
+    toReferenceSpace,
+    referenceIlluminant,
+  ]);
 
   // update the state to reflect the selection of which color profile to visualize
   const changeSourceSpace = useCallback(
@@ -95,6 +183,7 @@ export function RGBVisualization() {
     []
   );
 
+  // update the reference space to the user selected space
   const changeReferenceSpace = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const { value } = event.target;
@@ -103,15 +192,24 @@ export function RGBVisualization() {
     []
   );
 
-  // update of component callbacks
+  // change the fidelity for which to render the meshes
+  const changeFidelity = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const { value } = event.target;
+      setMeshDivisions(Number(value));
+    },
+    []
+  );
+
+  // update of component callbacks for red
   const handleRedComponentChange = useCallback((value: number) => {
     setRedComponent(value / 255);
   }, []);
-  // update of component callbacks
+  // update of component callbacks for green
   const handleGreenComponentChange = useCallback((value: number) => {
     setGreenComponent(value / 255);
   }, []);
-  // update of component callbacks
+  // update of component callbacks for blue
   const handleBlueComponentChange = useCallback((value: number) => {
     setBlueComponent(value / 255);
   }, []);
@@ -121,9 +219,9 @@ export function RGBVisualization() {
     (scene: Babylon.Scene) => {
       renderRGBPoint(
         [redComponent, greenComponent, blueComponent],
-        Object(ColorSpace)[toColorSpace],
-        ReferenceSpace[toReferenceSpace],
-        Object(Illuminant)[referenceIlluminant],
+        toColorSpace,
+        toReferenceSpace,
+        referenceIlluminant,
         scene
       );
     },
@@ -139,27 +237,17 @@ export function RGBVisualization() {
 
   const renderLchhMesh = useCallback(
     (scene: Babylon.Scene) => {
-      renderRGBinLUV(
-        meshGeometryVertices,
-        Object(ColorSpace)[toColorSpace],
-        referenceIlluminant,
-        scene
-      );
+      renderRGBinLUV(meshVertexData, scene);
     },
-    [meshGeometryVertices, referenceIlluminant, toColorSpace]
+    [meshVertexData]
   );
 
   // render the color space mesh given a selected color space
   const renderXyzMesh = useCallback(
     (scene: Babylon.Scene) => {
-      renderColorSpace(
-        meshGeometryVertices,
-        Object(ColorSpace)[toColorSpace],
-        Object(Illuminant)[referenceIlluminant],
-        scene
-      );
+      renderColorSpace(meshVertexData, scene);
     },
-    [meshGeometryVertices, toColorSpace, referenceIlluminant]
+    [meshVertexData]
   );
 
   // render the container
@@ -192,6 +280,20 @@ export function RGBVisualization() {
           initialValue={toReferenceSpace}
         >
           <ReferenceSpaceOptions />
+        </Select>
+        <Select
+          className={styles.colorSpaceSelector}
+          onChange={changeFidelity}
+          id="mesh fidelity"
+          label="fidelity"
+          initialValue={String(meshDivisions)}
+        >
+          <option value="2">2 segments</option>
+          <option value="4">4 segments</option>
+          <option value="8">8 segments</option>
+          <option value="16">16 segments</option>
+          <option value="24">24 segments</option>
+          <option value="48">48 segments</option>
         </Select>
       </header>
 

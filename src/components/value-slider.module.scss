@@ -7,10 +7,11 @@
 
 .handle {
   position: absolute;
-  width: 2rem;
-  height: 1rem;
-  border-radius: 1px;
+  width: 1rem;
+  height: 2rem;
+  border-radius: 4px;
   background: white;
+  cursor: pointer;
   box-shadow: 0 0.3rem 0.6rem rgba(0, 0, 0, 0.05);
 }
 

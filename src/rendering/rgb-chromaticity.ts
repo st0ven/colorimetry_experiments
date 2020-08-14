@@ -4,7 +4,6 @@ import {
   ColorSpace,
   ReferenceSpace,
   XYZ_primaries,
-  Illuminant,
 } from "../helper/color-space";
 import {
   project_XYZ_to_xyY,

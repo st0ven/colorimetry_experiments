@@ -3,10 +3,10 @@ import cx from "classnames";
 import styles from "./select.module.scss";
 
 interface SelectProps {
-  children: React.ReactElement | React.ReactChildren;
+  children: React.ReactElement | React.ReactElement[] | React.ReactChildren;
   className?: string;
   id: string;
-  initialValue?: string;
+  initialValue?: string | number;
   label?: string;
   onChange?(event: React.ChangeEvent<HTMLSelectElement>): void;
 }
@@ -22,7 +22,6 @@ export function Select({
   const selectCx: string = cx(styles.select, {
     [className]: Boolean(className),
   });
-
   return (
     <aside className={selectCx}>
       {label ? (

@@ -4,14 +4,6 @@
 const { loaderByName, addBeforeLoader } = require("@craco/craco");
 
 module.exports = {
-  /*webpack: {
-    plugins: [
-      {
-        plugin: csvPlugin,
-        options: { test: /\.csv$/ },
-      },
-    ],
-	},*/
   webpack: {
     configure: function (webpackConfig) {
       const csvLoader = {
@@ -19,7 +11,16 @@ module.exports = {
         use: ["csv-loader"],
       };
 
+      const workerLoader = {
+        test: /\.worker\.js$/,
+        loader: "worker-loader",
+        options: {
+          inline: "fallback",
+        },
+      };
+
       addBeforeLoader(webpackConfig, loaderByName("file-loader"), csvLoader);
+      addBeforeLoader(webpackConfig, loaderByName("ts-loader"), workerLoader);
 
       return webpackConfig;
     },
@@ -29,6 +30,7 @@ module.exports = {
         ".jsx",
         ".ts",
         ".tsx",
+        ".d.ts",
         ".csv",
         ".css",
         ".module.css",

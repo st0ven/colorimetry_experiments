@@ -352,10 +352,6 @@ export function transform_RGB_to_XYZ(
     transformMatrix,
     rotateMatrix([options?.compand ? linearColor : normalized_color])
   ).flat();
-  console.log(
-    rgb_color,
-    referenceIlluminant
-  );
 
   // perform chromatic adaptation transformation in case the illuminants of the
   // reference space and rgb space are different.
