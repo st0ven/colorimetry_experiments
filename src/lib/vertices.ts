@@ -125,7 +125,7 @@ export function getPolarCoordinatesFor(colorNormalized: number[]): number[] {
 // given a source collection of vertices representing a 3d cube,
 // receive a number representing how many divisions to extract from
 // the source collection. Returns a new, trimmed copy of the source.
-export function trimVertices(
+export function trimGeometry(
   vertices: number[][][],
   divisions: number
 ): number[][][] {
@@ -142,13 +142,13 @@ export function trimVertices(
 
   // otherwise proceed to trim data
   else {
-    return trimVerticesByDivisionsAlgo(vertices, divisions);
+    return trimGeometryByDivisionsAlgo(vertices, divisions);
   }
 }
 
 // algorithm which trims out the vectors from an array of  planar matrices of vectors
 // at set intervals as defined by how many divisions the resulting mesh should contain.
-function trimVerticesByDivisionsAlgo(
+function trimGeometryByDivisionsAlgo(
   // the original set of vertices to trim
   geometry: number[][][],
   // the resulting number of dimensions a planar matrix should contain
@@ -194,19 +194,21 @@ function trimVerticesByDivisionsAlgo(
         ? 0
         : colIndex === divisions
         ? planeDivisions + 1
-        : planeDivisions / 2;
+        : (planeDivisions / divisions) * colIndex;
 
       // calculate the final vertex index to trim relative to the original vertex data
-      const vertexIndex: number = Math.round(colDelta - trimDelta + rowDelta);
+      const vertexIndex: number = Math.ceil(colDelta - trimDelta + rowDelta);
 
       // set a reference to the vector within the source planar matrix
       const vertex: number[] = plane[vertexIndex];
+      //console.log(colIndex, trimDelta, vertex);
 
       // append this to our trimmed plane
       trimmedPlane.push(vertex);
     }
     // add trimmed plane to trimmed geometry
     trimmedGeometry.push(trimmedPlane);
+    //console.log("---");
   }
   return trimmedGeometry;
 }

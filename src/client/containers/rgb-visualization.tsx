@@ -76,8 +76,10 @@ export function RGBVisualization() {
   );
 
   // other controls to store in state
-  const [meshDivisions, setMeshDivisions] = useState<number>(3);
-  const [useGeometry, setGeometry] = useState<number[][][]>([]);
+  const [meshDivisions, setMeshDivisions] = useState<number>(4);
+  const [useGeometry, setGeometry] = useState<Babylon.VertexData>(
+    new Babylon.VertexData()
+  );
 
   // gather vertices representing perimeter points of a color space represented
   // as rgb pairs segmented into paths.
@@ -88,22 +90,28 @@ export function RGBVisualization() {
   }, [meshDivisions]);*/
 
   useEffect(() => {
-    fetchColorSpaceGeometry(meshDivisions).then((result) => {
-      console.log('result', result);
+    fetchColorSpaceGeometry(
+      meshDivisions,
+      toColorSpace,
+      ReferenceSpace.RGB,
+      toReferenceSpace,
+      referenceIlluminant
+    ).then((result: Babylon.VertexData) => {
       try {
-        const vertices: number[][][] = result.map((plane: number[][]) =>
-          plane.map((vertex: number[]) => expandRgbColor(vertex))
-        );
-        setGeometry(vertices);
+        console.log(result);
+        /*const vertices: number[][][] = result.map((plane: number[][]) =>
+            plane.map((vertex: number[]) => expandRgbColor(vertex))
+          );*/
+        setGeometry(result);
       } catch (error) {
         console.warn(error);
       }
     });
-  }, [meshDivisions]);
+  }, [meshDivisions, toColorSpace, toReferenceSpace, referenceIlluminant]);
 
   // memoize the geometry in the form of vertex data to be passed to each
   // render function. This data is dependent on a number of user-defined variables.
-  const meshVertexData: Babylon.VertexData = useMemo(() => {
+  /*const meshVertexData: Babylon.VertexData = useMemo(() => {
     if (useGeometry?.length) {
       // create vertex data and subsequent lists to store necessary data.
       const vertexData: Babylon.VertexData = new Babylon.VertexData();
@@ -123,7 +131,8 @@ export function RGBVisualization() {
       for (let i: number = 0; i < totalVerts; i++) {
         // set reference to the path within the vertex data
         let plane: number[][] = useGeometry[i];
-        let pathLength: number = Math.ceil(Math.sqrt(plane.length));
+
+        let pathLength: number = Math.sqrt(plane.length);
 
         for (let j: number = 0; j < plane.length; j++) {
           // reference to this vertex to transform
@@ -144,7 +153,7 @@ export function RGBVisualization() {
           positions.push(
             toReferenceSpace === ReferenceSpace.LCHuv
               ? getPolarCoordinatesFor(normalizeLchColor(position))
-              : normalizeRGBColor(position)
+              : position
           );
 
           // calculate indices algorithmically and push to list
@@ -170,6 +179,7 @@ export function RGBVisualization() {
       return new Babylon.VertexData();
     }
   }, [useGeometry, toColorSpace, toReferenceSpace, referenceIlluminant]);
+  */
 
   // update the state to reflect the selection of which color profile to visualize
   const changeSourceSpace = useCallback(
@@ -244,17 +254,17 @@ export function RGBVisualization() {
 
   const renderLchhMesh = useCallback(
     (scene: Babylon.Scene) => {
-      renderRGBinLUV(meshVertexData, scene);
+      renderRGBinLUV(useGeometry, scene);
     },
-    [meshVertexData]
+    [useGeometry]
   );
 
   // render the color space mesh given a selected color space
   const renderXyzMesh = useCallback(
     (scene: Babylon.Scene) => {
-      renderColorSpace(meshVertexData, scene);
+      renderColorSpace(useGeometry, scene);
     },
-    [meshVertexData]
+    [useGeometry]
   );
 
   // render the container
@@ -299,8 +309,8 @@ export function RGBVisualization() {
           <option value="4">4 segments</option>
           <option value="8">8 segments</option>
           <option value="16">16 segments</option>
-          <option value="24">24 segments</option>
-          <option value="48">48 segments</option>
+          <option value="32">32 segments</option>
+          <option value="64">64 segments</option>
         </Select>
       </header>
 
