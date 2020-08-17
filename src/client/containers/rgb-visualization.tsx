@@ -9,7 +9,7 @@ import {
 } from "../components/color-space-options";
 import { IlluminantOptions } from "../components/illuminant-options";
 import { ColorComponent } from "../components/color-component-input";
-import { ColorSpace, Illuminant, ReferenceSpace } from "../helper/color-space";
+import { ColorSpace, Illuminant, ReferenceSpace } from "../../lib/color-space";
 import { renderHemiLight } from "../rendering/lights";
 import {
   renderColorSpace,
@@ -17,14 +17,18 @@ import {
   renderRGBinLUV,
 } from "../rendering/rgb-color-space";
 import {
-  getBoxGeometry,
   mapPositionFromVertex,
   getPolarCoordinatesFor,
   mapFacetsFromVertex,
   mapColorFromVertex,
-} from "../helper/vertices";
-import { AxisRenderOptions } from "src/rendering/axes";
-import { normalizeLchColor, expandRgbColor } from "../helper/transformations";
+} from "../../lib/vertices";
+import { AxisRenderOptions } from "../rendering/axes";
+import {
+  normalizeRGBColor,
+  normalizeLchColor,
+  expandRgbColor,
+} from "../../lib/color-transformations";
+import { fetchColorSpaceGeometry } from "../api/geometry";
 
 const axisOptionsL: AxisRenderOptions = {
   scalarMin: 0,
@@ -57,16 +61,6 @@ const cylindricalAxesOptions: GraphAxisOptions = {
 };
 
 export function RGBVisualization() {
-  (async function asyncTest() {
-    const response = await fetch("/transform/");
-    //const body = await response.json();
-    console.log(response);
-    if (response.status === 200) {
-      //onsole.log(response.body);
-    } else {
-      //throw Error(response);
-    }
-  })();
   // hold state for RGB color inputs
   const [redComponent, setRedComponent] = useState<number>(1);
   const [greenComponent, setGreenComponent] = useState<number>(1);
@@ -82,87 +76,100 @@ export function RGBVisualization() {
   );
 
   // other controls to store in state
-  const [meshDivisions, setMeshDivisions] = useState<number>(16);
-  const [useGeometry, setGeometry] = useState<Babylon.VertexData>(
-    new Babylon.VertexData()
-  );
+  const [meshDivisions, setMeshDivisions] = useState<number>(3);
+  const [useGeometry, setGeometry] = useState<number[][][]>([]);
 
   // gather vertices representing perimeter points of a color space represented
   // as rgb pairs segmented into paths.
-  const meshGeometryVertices: number[][][] = useMemo((): number[][][] => {
-    return getBoxGeometry(meshDivisions);
+  /*const meshGeometryVertices: Promise<number[][][]> = useMemo(async (): Promise<number[][][]> => {
+    const result: number[][][] = await fetchColorSpaceGeometry(meshDivisions);
+    //return getBoxGeometry(meshDivisions);
+    return result;
+  }, [meshDivisions]);*/
+
+  useEffect(() => {
+    fetchColorSpaceGeometry(meshDivisions).then((result) => {
+      console.log('result', result);
+      try {
+        const vertices: number[][][] = result.map((plane: number[][]) =>
+          plane.map((vertex: number[]) => expandRgbColor(vertex))
+        );
+        setGeometry(vertices);
+      } catch (error) {
+        console.warn(error);
+      }
+    });
   }, [meshDivisions]);
 
   // memoize the geometry in the form of vertex data to be passed to each
   // render function. This data is dependent on a number of user-defined variables.
   const meshVertexData: Babylon.VertexData = useMemo(() => {
-    // create vertex data and subsequent lists to store necessary data.
-    const vertexData: Babylon.VertexData = new Babylon.VertexData();
-    const positions: number[][] = [];
-    const indices: number[][] = [];
-    const colors: number[][] = [];
+    if (useGeometry?.length) {
+      // create vertex data and subsequent lists to store necessary data.
+      const vertexData: Babylon.VertexData = new Babylon.VertexData();
+      const positions: number[][] = [];
+      const indices: number[][] = [];
+      const colors: number[][] = [];
 
-    // quick alias to the total vert count of the geometry.
-    const totalVerts: number = meshGeometryVertices.length;
+      // quick alias to the total vert count of the geometry.
+      const totalVerts: number = useGeometry.length;
 
-    // determine what params to push along with the trannsformation method
-    const transformParams: any[] =
-      toReferenceSpace === ReferenceSpace.LCHuv
-        ? [toColorSpace, referenceIlluminant]
-        : [toColorSpace, { referenceIlluminant }];
+      // determine what params to push along with the trannsformation method
+      const transformParams: any[] =
+        toReferenceSpace === ReferenceSpace.LCHuv
+          ? [toColorSpace, referenceIlluminant]
+          : [toColorSpace, { referenceIlluminant }];
 
-    for (let i: number = 0; i < totalVerts; i++) {
-      // set reference to the path within the vertex data
-      let plane: number[][] = meshGeometryVertices[i];
-      let pathLength: number = Math.sqrt(plane.length);
+      for (let i: number = 0; i < totalVerts; i++) {
+        // set reference to the path within the vertex data
+        let plane: number[][] = useGeometry[i];
+        let pathLength: number = Math.ceil(Math.sqrt(plane.length));
 
-      for (let j: number = 0; j < plane.length; j++) {
-        // reference to this vertex to transform
-        let vertex: number[] = plane[j];
+        for (let j: number = 0; j < plane.length; j++) {
+          // reference to this vertex to transform
+          let vertex: number[] = plane[j];
 
-        // expand range from normalized geometry data to RGB
-        let rgbColor: number[] = expandRgbColor(vertex);
+          // expand range from normalized geometry data to RGB
+          let rgbColor: number[] = expandRgbColor(vertex);
 
-        // transforms the vertex to a position in XYZ space
-        let position: number[] = mapPositionFromVertex(
-          rgbColor,
-          ReferenceSpace.RGB,
-          toReferenceSpace,
-          transformParams
-        );
+          // transforms the vertex to a position in XYZ space
+          let position: number[] = mapPositionFromVertex(
+            rgbColor,
+            ReferenceSpace.RGB,
+            toReferenceSpace,
+            transformParams
+          );
 
-        // polar coordinate color spaces need an additional mapping transformation
-        positions.push(
-          toReferenceSpace === ReferenceSpace.LCHuv
-            ? getPolarCoordinatesFor(normalizeLchColor(position))
-            : position
-        );
+          // polar coordinate color spaces need an additional mapping transformation
+          positions.push(
+            toReferenceSpace === ReferenceSpace.LCHuv
+              ? getPolarCoordinatesFor(normalizeLchColor(position))
+              : normalizeRGBColor(position)
+          );
 
-        // calculate indices algorithmically and push to list
-        if (plane[j + pathLength] && j % pathLength < pathLength - 1) {
-          indices.push(mapFacetsFromVertex(i * plane.length + j, pathLength));
+          // calculate indices algorithmically and push to list
+          if (plane[j + pathLength] && j % pathLength < pathLength - 1) {
+            indices.push(mapFacetsFromVertex(i * plane.length + j, pathLength));
+          }
+
+          // map colors to positions and push to list
+          colors.push(
+            mapColorFromVertex(rgbColor, toColorSpace, referenceIlluminant)
+          );
         }
-
-        // map colors to positions and push to list
-        colors.push(
-          mapColorFromVertex(rgbColor, toColorSpace, referenceIlluminant)
-        );
       }
+
+      // append all lists to the vertexData object, flattened
+      vertexData.positions = positions.flat();
+      vertexData.indices = indices.flat();
+      vertexData.colors = colors.flat();
+
+      // assign the vertex data to be memoized
+      return vertexData;
+    } else {
+      return new Babylon.VertexData();
     }
-
-    // append all lists to the vertexData object, flattened
-    vertexData.positions = positions.flat();
-    vertexData.indices = indices.flat();
-    vertexData.colors = colors.flat();
-
-    // assign the vertex data to be memoized
-    return vertexData;
-  }, [
-    meshGeometryVertices,
-    toColorSpace,
-    toReferenceSpace,
-    referenceIlluminant,
-  ]);
+  }, [useGeometry, toColorSpace, toReferenceSpace, referenceIlluminant]);
 
   // update the state to reflect the selection of which color profile to visualize
   const changeSourceSpace = useCallback(

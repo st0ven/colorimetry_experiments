@@ -1,4 +1,4 @@
-import { invertMatrix, matrixMultiply, rotateMatrix } from "./coordinate-math";
+import { invertMatrix, matrixMultiply, rotateMatrix } from "./math-conversion";
 import {
   ColorSpace,
   Illuminant,
@@ -7,6 +7,7 @@ import {
   colorSpace,
 } from "./color-space";
 import { compand, CompandMethod, transferParams } from "./gamma-conversion";
+import { flatten } from "./math-conversion";
 
 interface ColorTransformOptions {
   compand?: boolean;
@@ -97,16 +98,14 @@ function applyChromaticAdaptation(
     const d_whitepoint: number[] = illuminant[d_illuminant];
 
     // define cone response primaries from a source illuminant
-    const sourceCrsp: number[] = matrixMultiply(
-      adaptiveMatrix.bradford,
-      rotateMatrix([s_whitepoint])
-    ).flat();
+    const sourceCrsp: number[] = flatten(
+      matrixMultiply(adaptiveMatrix.bradford, rotateMatrix([s_whitepoint]))
+    );
 
     // define cone response primaries from a destination illuminant (d50)
-    const destCrsp: number[] = matrixMultiply(
-      adaptiveMatrix.bradford,
-      rotateMatrix([d_whitepoint])
-    ).flat();
+    const destCrsp: number[] = flatten(
+      matrixMultiply(adaptiveMatrix.bradford, rotateMatrix([d_whitepoint]))
+    );
 
     // define the cone response matrix
     const crspMatrix: number[][] = [
@@ -122,9 +121,9 @@ function applyChromaticAdaptation(
     );
 
     // convert the adapted XYZ values
-    return matrixMultiply(tMatrix, rotateMatrix([s_XYZ]))
-      .flat()
-      .map((component: number) => (isNaN(component) ? 0 : component));
+    return flatten(
+      matrixMultiply(tMatrix, rotateMatrix([s_XYZ]))
+    ).map((component: number) => (isNaN(component) ? 0 : component));
   }
 }
 
@@ -156,10 +155,9 @@ function calculate_RGB_to_XYZ_transformation_matrix(
   );
 
   // calculate source RGB from matrix M and the illuminant
-  const sourceRGB: number[] = matrixMultiply(
-    invertMatrix(xyzMatrix),
-    rotateMatrix([referenceIlluminant])
-  ).flat();
+  const sourceRGB: number[] = flatten(
+    matrixMultiply(invertMatrix(xyzMatrix), rotateMatrix([referenceIlluminant]))
+  );
 
   // multiply sourceRGB with xyzMatrix values to get the transform matrix M
   const tMatrix: number[][] = xyzMatrix.map((component_xyz: number[]) =>
@@ -348,10 +346,12 @@ export function transform_RGB_to_XYZ(
   );
 
   // compute the color in XYZ space
-  const transformed_color: number[] = matrixMultiply(
-    transformMatrix,
-    rotateMatrix([options?.compand ? linearColor : normalized_color])
-  ).flat();
+  const transformed_color: number[] = flatten(
+    matrixMultiply(
+      transformMatrix,
+      rotateMatrix([options?.compand ? linearColor : normalized_color])
+    )
+  );
 
   // perform chromatic adaptation transformation in case the illuminants of the
   // reference space and rgb space are different.
@@ -437,10 +437,9 @@ export function transform_XYZ_to_RGB(
     referenceIlluminant
   );
 
-  const linearColor: number[] = matrixMultiply(
-    invertMatrix(transformMatrix),
-    rotateMatrix([adapted_color])
-  ).flat();
+  const linearColor: number[] = flatten(
+    matrixMultiply(invertMatrix(transformMatrix), rotateMatrix([adapted_color]))
+  );
 
   return compandFunc(
     options?.compand ? linearColor : adapted_color,

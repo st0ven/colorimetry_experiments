@@ -2,9 +2,14 @@
 
 //const { addBeforeLoader } = require("@craco/craco/lib/loaders");
 const { loaderByName, addBeforeLoader } = require("@craco/craco");
+const path = require("path");
 
 module.exports = {
   webpack: {
+    alias: {
+      "@lib": path.join(path.resolve(__dirname, "./src/lib")),
+      "@components": path.join(path.resolve(__dirname, "./src/components")),
+    },
     configure: function (webpackConfig) {
       const csvLoader = {
         test: /\.csv$/,

@@ -1,12 +1,7 @@
 {
-  "extends": "./config/tsconfig.paths.json",
   "compilerOptions": {
     "target": "es2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -17,18 +12,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react",
-    "baseUrl": ".",
-    "typeRoots": [
-      "./node_modules/@types",
-      "./types"
-    ],
-    "module": "esnext"
+    "baseUrl": "../",
+    "module": "commonjs",
+    "paths": {
+      "@lib/*": ["./src/lib/*"],
+      "@server/*": ["./server/*"]
+    }
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "./src/server/**/*"
-  ]
+  "include": ["./server", "./src/lib"]
 }

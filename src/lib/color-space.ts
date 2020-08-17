@@ -1,5 +1,3 @@
-import { GraphType } from "src/components/graph-3d";
-
 export enum ColorSpace {
   adobeRGB = "adobeRGB",
   adobeWideGamut = "adobeWideGamut",
@@ -30,13 +28,6 @@ export enum ReferenceSpace {
   XYZ = "XYZ",
   xyY = "xyY",
 }
-
-export const referenceSpace: any = {
-  [ReferenceSpace.LCHuv]: { graphType: GraphType.cylindrical },
-  [ReferenceSpace.XYZ]: {
-    graphType: GraphType.box,
-  },
-};
 
 export const illuminant: any = {
   [Illuminant.A]: [1.0985, 1, 0.35585],

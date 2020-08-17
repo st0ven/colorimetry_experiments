@@ -3,8 +3,8 @@ import {
   expandRgbColor,
   normalizeLchColor,
   Transform,
-} from "../helper/transformations";
-import { ColorSpace, ReferenceSpace, Illuminant } from "../helper/color-space";
+} from "../../lib/color-transformations";
+import { ColorSpace, ReferenceSpace, Illuminant } from "../../lib/color-space";
 import { sceneEntityNames } from "../data/rendering-constants";
 
 // Render profile color space in XYZ space
@@ -52,7 +52,7 @@ export function renderColorSpace(
     meshSpectrum.clone(mesh.wireframe, null, true);
 
   // apply the material to the wireframe clone
-  //wireframeMesh.material = materialWireframe;
+  wireframeMesh.material = materialWireframe;
 
   // get reference to the in-scene camera
   const camera: Babylon.Nullable<Babylon.ArcRotateCamera> = scene.getCameraByName(

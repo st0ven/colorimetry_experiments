@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, ChangeEvent } from "react";
+import React, { useState, useCallback, ChangeEvent } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./chromaticity-visualization.module.scss";
-import { ColorSpace } from "../helper/color-space";
+import { ColorSpace } from "../../lib/color-space";
 import { Graph3d, GraphType } from "../components/graph-3d";
 import { Select } from "../components/select";
 import { ColorSpaceOptions } from "../components/color-space-options";

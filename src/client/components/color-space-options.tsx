@@ -1,5 +1,5 @@
 import React from "react";
-import { ColorSpace, ReferenceSpace, colorSpace } from "../helper/color-space";
+import { ColorSpace, ReferenceSpace, colorSpace } from "../../lib/color-space";
 
 // populate a list of color space options within an <Option> tag as mapped
 // against the keys of the ColorSpace enum

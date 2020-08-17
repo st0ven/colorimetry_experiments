@@ -1,7 +1,7 @@
 import * as Babylon from "babylonjs";
 import { renderLabel } from "../rendering/billboards";
 import { FloatArray } from "babylonjs";
-import { GraphType } from "src/components/graph-3d";
+import { GraphType } from "../components/graph-3d";
 
 // render base axial guidelines
 const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Illuminant } from "../helper/color-space";
+import { Illuminant } from "../../lib/color-space";
 
 export function IlluminantOptions() {
   return (

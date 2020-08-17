@@ -4,13 +4,13 @@ import {
   ColorSpace,
   ReferenceSpace,
   XYZ_primaries,
-} from "../helper/color-space";
+} from "../../lib/color-space";
 import {
   project_XYZ_to_xyY,
   normalizeColor,
   Transform,
   expandRgbColor,
-} from "../helper/transformations";
+} from "../../lib/color-transformations";
 
 /*
 Render color profile planes projected into xyY space

@@ -1,27 +1,19 @@
-/*
-export function convertCartesianToSphericalCoords(vector3: Vector3): Spherical {
-  const { x, y, z } = vector3;
-  let r: number = Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
-  let p: number = Math.sqrt(Math.pow(r, 2) + Math.pow(z, 2));
-  let theta: number = convertRadiansToDegrees(Math.atan2(y, x));
-  let phi: number = convertRadiansToDegrees(Math.atan2(z, r));
-  return new Spherical(p, phi, theta);
+export function flatten(array: any[], maxDepth: number = 0): any[] {
+  return (function iterateDepth(
+    array: any[],
+    flatArray: any[] = [],
+    depth: number
+  ): any[] {
+    array.forEach((item: any) => {
+      if (item instanceof Array && depth < (maxDepth || Infinity)) {
+        iterateDepth(item, flatArray, depth + 1);
+      } else {
+        flatArray.push(item);
+      }
+    });
+    return flatArray;
+  })(array, [], maxDepth);
 }
-
-export function convertSphericalToCartesianCoords(
-  r: number,
-  phi: number,
-  theta: number
-): Vector3 {
-  const phiRad: number = convertDegreesToRadians(phi),
-    thetaRad: number = convertDegreesToRadians(theta);
-
-  let z: number = r * Math.cos(phiRad),
-    x: number = r * Math.sin(phiRad) * Math.cos(thetaRad),
-    y: number = r * Math.sin(phiRad) * Math.sin(thetaRad);
-
-  return new Vector3(x, y, z);
-}*/
 
 export function convertRadiansToDegrees(rad: number): number {
   return rad * (180 / Math.PI);
@@ -35,10 +27,7 @@ export function scaleMatrix(coeff: number, matrix: number[][]): number[][] {
   return matrix.map((row: number[]) => row.map((j: number) => j * coeff));
 }
 
-export function matrixMultiply(
-  m1: number[][],
-  m2: number[][]
-): number[][] {
+export function matrixMultiply(m1: number[][], m2: number[][]): number[][] {
   if (m1.length && m2.length && m1[0].length === m2.length) {
     return Array(m1.length)
       .fill(Array(m2[0].length).fill(0))
