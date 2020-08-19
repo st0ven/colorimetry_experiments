@@ -1,5 +1,10 @@
 import React from "react";
-import { ColorSpace, ReferenceSpace, colorSpace } from "../../lib/color-space";
+import {
+  ColorSpace,
+  ColorModel,
+  Illuminant,
+  colorSpaceMap,
+} from "@lib/color-constants";
 
 // populate a list of color space options within an <Option> tag as mapped
 // against the keys of the ColorSpace enum
@@ -8,18 +13,30 @@ export function ColorSpaceOptions() {
     <React.Fragment>
       {Object.keys(ColorSpace).map((currentSpace: string) => (
         <option key={`option-${currentSpace}`} value={currentSpace}>
-          {colorSpace[currentSpace].label}
+          {colorSpaceMap.get(Object(ColorSpace)[currentSpace])?.label}
         </option>
       ))}
     </React.Fragment>
   );
 }
 
-export function ReferenceSpaceOptions() {
+export function ColorModelOptions() {
   return (
     <React.Fragment>
-      <option value={ReferenceSpace.LCHuv}>{ReferenceSpace.LCHuv}</option>
-      <option value={ReferenceSpace.XYZ}>{ReferenceSpace.XYZ}</option>
+      <option value={ColorModel.LCHuv}>{ColorModel.LCHuv}</option>
+      <option value={ColorModel.XYZ}>{ColorModel.XYZ}</option>
+    </React.Fragment>
+  );
+}
+
+export function IlluminantOptions() {
+  return (
+    <React.Fragment>
+      {Object.keys(Illuminant).map((targetIlluminant: string) => (
+        <option key={`option-${targetIlluminant}`} value={targetIlluminant}>
+          {Object(Illuminant)[targetIlluminant]}
+        </option>
+      ))}
     </React.Fragment>
   );
 }

@@ -7,8 +7,19 @@ const path = require("path");
 module.exports = {
   webpack: {
     alias: {
-      "@lib": path.join(path.resolve(__dirname, "./src/lib")),
-      "@components": path.join(path.resolve(__dirname, "./src/components")),
+      "@api": path.join(path.resolve(__dirname, "../src/client/api")),
+      "@components": path.join(
+        path.resolve(__dirname, "../src/client/components")
+      ),
+      "@containers": path.join(
+        path.resolve(__dirname, "../src/client/containers")
+      ),
+      "@hooks": path.join(path.resolve(__dirname, "../src/client/hooks")),
+      "@lib": path.join(path.resolve(__dirname, "../src/lib")),
+      "@rendering": path.join(
+        path.resolve(__dirname, "../src/client/rendering")
+      ),
+      "@res": path.join(path.resolve(__dirname, "../src/client/res")),
     },
     configure: function (webpackConfig) {
       const csvLoader = {
@@ -16,16 +27,7 @@ module.exports = {
         use: ["csv-loader"],
       };
 
-      const workerLoader = {
-        test: /\.worker\.js$/,
-        loader: "worker-loader",
-        options: {
-          inline: "fallback",
-        },
-      };
-
       addBeforeLoader(webpackConfig, loaderByName("file-loader"), csvLoader);
-      addBeforeLoader(webpackConfig, loaderByName("ts-loader"), workerLoader);
 
       return webpackConfig;
     },

@@ -1,7 +1,7 @@
 import * as Babylon from "babylonjs";
-import { renderLabel } from "../rendering/billboards";
+import { renderLabel } from "@rendering/billboards";
 import { FloatArray } from "babylonjs";
-import { GraphType } from "../components/graph-3d";
+import { GraphType } from "@components/graph-3d";
 
 // render base axial guidelines
 const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
@@ -179,9 +179,6 @@ export function renderCylinderAxis(
       )
     );
   }
-
-  const path: Babylon.Path3D = new Babylon.Path3D(linePoints);
-  const pathNormals: Babylon.Vector3[] = path.getNormals();
 
   // create axis mesh or get the existing mesh from the scene
   const circle: Babylon.LinesMesh =

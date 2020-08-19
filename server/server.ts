@@ -1,174 +1,121 @@
 import express, { Express } from "express";
 import { VertexData } from "babylonjs";
 import bodyParser from "body-parser";
-import { MongoClient, Db, Collection, MongoError, Cursor } from "mongodb";
+import { MongoClient, Db, Collection, MongoClientOptions } from "mongodb";
 import * as dotenv from "dotenv";
-
-import { Transform, expandRgbColor } from "../src/lib/color-transformations";
+import { ColorSpace, Illuminant, ColorModel } from "../src/lib/color-constants";
 import {
-  getBoxGeometry,
-  mapPositionFromVertex,
-  mapColorFromVertex,
-  mapFacetsFromVertex,
+  generateColorSpaceGeometry,
+  getTransformedVertexDataFromGeometry,
   trimGeometry,
 } from "../src/lib/vertices";
-import { ColorSpace, Illuminant, ReferenceSpace } from "../src/lib/color-space";
-import { flatten } from "../src/lib/math-conversion";
 
 dotenv.config();
 
 const app: Express = express();
 const port: number = (process.env.PROXY || 3009) as number;
 
-const dbUrl: string = "mongodb://localhost:27017";
+const dbUrl: string = "mongodb://localhost:27017/";
 const dbName: string | undefined = process.env.MONGODB_NAME;
+
+const mongoClientOptions: MongoClientOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+};
 
 // cache RGB color space mesh data if it does not already exist
 (async function storeGeneratedMeshData() {
-  try {
-    // limit divisions to an 8 bit value
-    const maxDivisions: number = Math.pow(2, 8);
+  // create instance to mongo client with url
+  const client: MongoClient = new MongoClient(
+    `${dbUrl}/color-space-mesh`,
+    mongoClientOptions
+  );
 
-    // establish connection to mongo
-    const client: MongoClient = await new MongoClient(
-      `${dbUrl}/color-space-mesh`
-    ).connect();
+  // limit divisions to an 8 bit value
+  const maxDivisions: number = Math.pow(2, 8);
 
-    // get the db from the client
-    const db: Db = client.db(dbName);
+  // establish connection to mongo
+  await client.connect();
 
-    // grab the collection of interest
-    const collection: Collection = db.collection("vertices");
+  // get the db from the client
+  const db: Db = client.db(dbName);
 
-    collection.deleteMany({ referenceSpace: "XYZ" });
+  // grab the collection of interest
+  const collection: Collection = db.collection("vertices");
 
-    // update document or insert if it doesnt exist
-    if (!(await collection.find({ divisions: maxDivisions }).count())) {
-      await collection.updateOne(
-        { referenceSpace: "XYZ" },
-        {
-          $set: {
-            divisions: maxDivisions,
-            referenceSpace: "XYZ",
-            vertices: getBoxGeometry(maxDivisions),
-          },
-        },
-        { upsert: true }
-      );
-      console.log("updated source collection");
+  // check if document for source color space already exists
+  const document: any = await collection.findOne({ referenceSpace: "XYZ" });
+
+  // update document or insert if it doesnt exist
+  if (!document) {
+    try {
+      await collection.insertOne({
+        divisions: maxDivisions,
+        referenceSpace: "XYZ",
+        vertices: generateColorSpaceGeometry(maxDivisions),
+      });
+    } catch (error) {
+      throw error;
     }
-
-    // close the connection
-    client.close();
-
-    // error handling
-  } catch (error) {
-    console.log(
-      "Error encountered when initially populating / querying color space mesh data",
-      error
-    );
   }
+
+  // close the connection
+  client.close();
 })();
 
 async function sendVertices(
   divisions: number,
   fromColorSpace: ColorSpace,
-  fromReferenceSpace: ReferenceSpace,
-  toReferenceSpace: ReferenceSpace,
+  fromColorModel: ColorModel,
+  toColorModel: ColorModel,
   referenceIlluminant: Illuminant
 ): Promise<any> {
-  try {
-    const maxSLA: number = 5000;
+  const maxSLA: number = 15000;
 
-    // establish connection to mongodb
-    const client: MongoClient = await new MongoClient(
-      `${dbUrl}/color-space-mesh`
-    ).connect();
+  // establish connection to mongodb
+  const client: MongoClient = new MongoClient(
+    `${dbUrl}/color-space-mesh`,
+    mongoClientOptions
+  );
 
-    // get the reference db holding geometry information
-    const db: Db = client.db(dbName);
+  await client.connect();
 
-    // grab the collection holding vertices data
-    const collection: Collection = db.collection("vertices");
+  // get the reference db holding geometry information
+  const db: Db = client.db(dbName);
 
-    // find the collection with the matched number of divisions
-    const document: any = await collection.findOne(
-      {
-        referenceSpace: "XYZ",
-      },
-      { maxTimeMS: maxSLA }
-    );
+  // grab the collection holding vertices data
+  const collection: Collection = db.collection("vertices");
 
-    const trimmedGeometry: number[][][] = trimGeometry(
-      document.vertices,
-      divisions
-    );
+  // find the collection with the matched number of divisions
+  const document: any = await collection.findOne(
+    {
+      referenceSpace: "XYZ",
+    },
+    { maxTimeMS: maxSLA }
+  );
 
-    // determine what params to push along with the trannsformation method
-    const transformParams: any[] =
-      toReferenceSpace === ReferenceSpace.LCHuv
-        ? [fromColorSpace, referenceIlluminant]
-        : [fromColorSpace, { referenceIlluminant }];
+  // grab a collection of vertices in a 3D matrix that trims from the
+  // source geometry. Divisions must be a power of 2.
+  const trimmedGeometry: number[][][] = trimGeometry(
+    document.vertices,
+    divisions
+  );
 
-    const positions: number[][][] = trimmedGeometry.map(
-      (trimmedPlane: number[][]) =>
-        trimmedPlane.map((vertex: number[]) =>
-          mapPositionFromVertex(
-            expandRgbColor(vertex),
-            fromReferenceSpace,
-            toReferenceSpace,
-            transformParams
-          )
-        )
-    );
+  const vertexData: VertexData = getTransformedVertexDataFromGeometry(
+    trimmedGeometry,
+    fromColorSpace,
+    fromColorModel,
+    toColorModel,
+    referenceIlluminant
+  );
 
-    const facets: (false | number[])[][] = trimmedGeometry.map(
-      (trimmedPlane: number[][], i: number) =>
-        trimmedPlane
-          .map((vertex: number[], j: number) => {
-            // calculate indices algorithmically and push to list
-            const pathLength: number = Math.sqrt(trimmedPlane.length);
-            return trimmedPlane[j + pathLength] &&
-              j % pathLength < pathLength - 1
-              ? mapFacetsFromVertex(i * trimmedPlane.length + j, pathLength)
-              : false;
-          })
-          .filter((n) => n)
-    );
+  client.close();
 
-    const colors: number[][][] = trimmedGeometry.map(
-      (trimmedPlane: number[][], i: number) =>
-        trimmedPlane
-          .map((vertex: number[], j: number) => {
-            return mapColorFromVertex(
-              expandRgbColor(vertex),
-              fromColorSpace,
-              referenceIlluminant
-            );
-          })
-          .filter((n) => n)
-    );
-
-    const vertexData: VertexData = new VertexData();
-    vertexData.positions = flatten(positions);
-    vertexData.indices = flatten(facets);
-    vertexData.colors = flatten(colors);
-
-    return JSON.stringify(vertexData);
-  } catch (error) {
-    console.log(error);
-  }
+  return JSON.stringify(vertexData);
 }
 
-sendVertices(
-  2,
-  ColorSpace.sRGB,
-  ReferenceSpace.RGB,
-  ReferenceSpace.XYZ,
-  Illuminant.D50
-);
-
 app.use(bodyParser.json());
+
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get("/data/color-space/vertices", async (request, res) => {
@@ -179,8 +126,8 @@ app.get("/data/color-space/vertices", async (request, res) => {
   let {
     divisions = 16,
     cspace = ColorSpace.sRGB,
-    fspace = ReferenceSpace.RGB,
-    tspace = ReferenceSpace.XYZ,
+    fspace = ColorModel.RGB,
+    tspace = ColorModel.XYZ,
     wp = Illuminant.D50,
   }: any = request.query;
 
@@ -200,6 +147,7 @@ app.get("/data/color-space/vertices", async (request, res) => {
   );
 
   // send back the response of the matching document
+  res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
   res.send(JSON.stringify(trimmedDocument));
 });
 

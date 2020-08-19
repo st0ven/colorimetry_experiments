@@ -2,10 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState } from "react";
 import cx from "classnames";
 import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
-import {
-  AxisRenderOptions,
-  renderAxes,
-} from "../rendering/axes";
+import { AxisRenderOptions, renderAxes } from "@rendering/axes";
 
 type RenderMethod = (scene: Babylon.Scene) => void;
 
@@ -105,11 +102,11 @@ export function Graph3d({
 
       parentNode.dispose();
 
-      renderAxes(type, scene, parentNode, axisOptions)
+      renderAxes(type, scene, parentNode, axisOptions);
 
       setAxesParentNode(parentNode);
     }
-  }, [axisOptions, type, cameraRef, sceneRef]);
+  }, [axisOptions, axesParentNode, type, cameraRef, sceneRef]);
 
   // Loop through the renderMethods prop array to invoke rendering functions which
   // offload the individual rendering responsibilities each function. Pass along

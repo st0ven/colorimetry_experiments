@@ -1,24 +1,16 @@
-import { ReferenceSpace, ColorSpace, Illuminant } from "./color-space";
-import { Transform } from "./color-transformations";
-import { Axis } from "babylonjs";
+import { ColorModel, ColorSpace, Illuminant } from "./color-constants";
+import {
+  Transform,
+  normalizeLchColor,
+  expandRgbColor,
+} from "./color-transformations";
+import { VertexData, Axis } from "babylonjs";
 import { flatten } from "./math-conversion";
-
-enum Fidelity {
-  low = "low",
-  medium = "medium",
-  high = "high",
-}
-
-export const fidelityMap: any = {
-  low: 4,
-  medium: 16,
-  high: 64,
-};
 
 // Generate a matrix of vertices representing a plane with a fixed component c.
 // Provide the axis that should remain fixed. The additional 2 dimentional components
 // will then map out a sized matrix determined by the divisions parameter.
-export function generate_plane_vertices(
+export function generatePlaneVertices(
   c: number,
   axis: Axis,
   divisions = 12
@@ -54,26 +46,32 @@ export function generate_plane_vertices(
   return plane;
 }
 
-export function getBoxGeometry(divisions: number = 1): number[][][] {
+// use generatePlaneVertices to construct an array of 6 planar faces to compose
+// a cube of evenly distributed vertices across each face. This cube geometry can
+// then be subsequently transformed to represent color space geometry across various
+// color spaces/models.
+export function generateColorSpaceGeometry(divisions: number = 1): number[][][] {
   const planeVertices: number[][][] = [];
 
   for (let i: number = 0; i <= 2; i++) {
     for (let j: number = 0; j <= 1; j++) {
       const axis: Axis = !i ? Axis.X : i === 1 ? Axis.Y : Axis.Z;
-      planeVertices.push(generate_plane_vertices(j, axis, divisions));
+      planeVertices.push(generatePlaneVertices(j, axis, divisions));
     }
   }
 
   return planeVertices;
 }
 
-export function mapColorFromVertex(
+// given a position in XYZ space, calculate the appropriate RGB value to 
+// assign to that vertex.
+function getColorFromVertex(
   vertex: number[],
   useProfile: ColorSpace = ColorSpace.sRGB,
   referenceIlluminant: Illuminant = Illuminant.D65
 ): number[] {
-  return Transform(ReferenceSpace.RGB)
-    .to(ReferenceSpace.XYZ)(vertex, useProfile, { referenceIlluminant })
+  return Transform(ColorModel.RGB)
+    .to(ColorModel.XYZ)(vertex, useProfile, referenceIlluminant)
     .concat([1]);
 }
 
@@ -83,7 +81,7 @@ export function mapColorFromVertex(
 // no such path exists, the invoking context should take care not to invoke this
 // function, less they will receive reference to indices that do not exist within
 // the target mesh's geometry.
-export function mapFacetsFromVertex(i: number, offset: number): number[] {
+function getFacetsFromVertex(i: number, offset: number): number[] {
   let p0: number = i;
   let p1: number = p0 + 1;
   let adj_p0: number = p0 + offset;
@@ -93,16 +91,79 @@ export function mapFacetsFromVertex(i: number, offset: number): number[] {
   return flatten([facetA, facetB]);
 }
 
-export function mapPositionFromVertex(
+// given a position in XYZ space, map where to render that position based on 
+// the desired reference color model. This can either be calculated as polar or
+// euclidean coordinates based on the desired color model to visualize the color space.
+function getPositionFromVertex(
   vertex: number[],
-  fromColorSpace: ReferenceSpace,
-  toColorSpace: ReferenceSpace,
-  transformationParams: any[]
+  sourceColorSpace: ColorSpace,
+  sourceColorModel: ColorModel,
+  targetColorModel: ColorModel,
+  referenceIlluminant: Illuminant
 ): number[] {
-  return Transform(fromColorSpace).to(toColorSpace)(
-    vertex,
-    ...transformationParams
-  );
+  const transformedColor: number[] = Transform(sourceColorModel).to(
+    targetColorModel
+  )(vertex, sourceColorSpace, referenceIlluminant);
+
+  const mappedVertex: number[] =
+    targetColorModel === ColorModel.LCHuv
+      ? getPolarCoordinatesFor(normalizeLchColor(transformedColor))
+      : transformedColor;
+
+  return mappedVertex;
+}
+
+// given a geometry matrix of positions, return calculated VertexData to render the
+// geometry within Babylon.js. Ultimately maps positions, facets and colors for each vertex.
+export function getTransformedVertexDataFromGeometry(
+  geometry: number[][][],
+  fromColorSpace: ColorSpace,
+  fromColorModel: ColorModel,
+  toColorModel: ColorModel,
+  referenceIlluminant: Illuminant
+): VertexData {
+  const positions: number[][] = [];
+  const facets: number[][] = [];
+  const colors: number[][] = [];
+
+  for (let i: number = 0; i < geometry.length; i++) {
+    for (let j: number = 0; j < geometry[i].length; j++) {
+      const vertex: number[] = geometry[i][j];
+      const pathLength: number = Math.sqrt(geometry[i].length);
+
+      positions.push(
+        getPositionFromVertex(
+          expandRgbColor(vertex),
+          fromColorSpace,
+          fromColorModel,
+          toColorModel,
+          referenceIlluminant
+        )
+      );
+
+      colors.push(
+        getColorFromVertex(
+          expandRgbColor(vertex),
+          fromColorSpace,
+          referenceIlluminant
+        )
+      );
+
+      // calculate indices algorithmically and push to list
+      if (geometry[i][j + pathLength] && j % pathLength < pathLength - 1) {
+        facets.push(
+          getFacetsFromVertex(i * geometry[i].length + j, pathLength)
+        );
+      }
+    }
+  }
+
+  const vertexData: VertexData = new VertexData();
+  vertexData.positions = flatten(positions);
+  vertexData.indices = flatten(facets);
+  vertexData.colors = flatten(colors);
+
+  return vertexData;
 }
 
 // takes an LCHuv color that has been normalized to a 0-1 range and
@@ -200,15 +261,15 @@ function trimGeometryByDivisionsAlgo(
       const vertexIndex: number = Math.ceil(colDelta - trimDelta + rowDelta);
 
       // set a reference to the vector within the source planar matrix
-      const vertex: number[] = plane[vertexIndex];
-      //console.log(colIndex, trimDelta, vertex);
+      const vertex: number[] = plane[vertexIndex].map((component: number) =>
+        parseFloat(component.toFixed(4))
+      );
 
       // append this to our trimmed plane
       trimmedPlane.push(vertex);
     }
     // add trimmed plane to trimmed geometry
     trimmedGeometry.push(trimmedPlane);
-    //console.log("---");
   }
   return trimmedGeometry;
 }

@@ -1,7 +1,7 @@
 import React from "react";
 import styles from "./App.module.scss";
-import { ChromaticityVisualization } from "./containers/chromaticity-visualization";
-import { RGBVisualization } from "./containers/rgb-visualization";
+import { ChromaticityVisualization } from "@containers/chromaticity";
+import { RGBVisualization } from "@containers/color-space";
 
 // Main application component
 function App() {

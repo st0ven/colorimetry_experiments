@@ -4,7 +4,7 @@ import styles from "./value-slider.module.scss";
 import {
   useInteractionCoordinates,
   UseInteractionCoordinates,
-} from "../hooks/interaction-coordinates";
+} from "@hooks/interaction-coordinates";
 
 interface ValueSliderProps {
   className?: string;

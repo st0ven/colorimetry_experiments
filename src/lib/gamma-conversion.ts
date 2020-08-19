@@ -1,4 +1,4 @@
-import { ColorSpace } from "./color-space";
+import { ColorSpace } from "./color-constants";
 
 // enumeration of different companding algorithms to be used
 export enum CompandMethod {
@@ -44,7 +44,7 @@ export const transferParams: any = {
 
 // an object housing compand functions based on the compand type and whether
 // values are being converted to or from linear RGB space (no gamma applied)
-export const compand: any = {
+export const compandDict: any = {
   // convert normalized rgb values to a gamma-corrected values
   // with a simple/flat gamma coefficient.
   gamma: {
@@ -77,8 +77,8 @@ export const compand: any = {
       const { alpha = 1, gamma } = transferParams[sourceColorSpace];
 
       // fetch variables needed for forward transformatoin calculation
-      const kSubZero = compand.sRGB.kSubZero(alpha, gamma);
-      const phi = compand.sRGB.phi(alpha, gamma);
+      const kSubZero = compandDict.sRGB.kSubZero(alpha, gamma);
+      const phi = compandDict.sRGB.phi(alpha, gamma);
       const threshold: number = kSubZero / phi;
 
       // apply forward transformation
@@ -93,8 +93,8 @@ export const compand: any = {
       const { alpha = 1, gamma } = transferParams[sourceColorSpace];
 
       // fetch variables needed for inverse transformation calculations
-      const kSubZero = compand.sRGB.kSubZero(alpha, gamma);
-      const phi = compand.sRGB.phi(alpha, gamma);
+      const kSubZero = compandDict.sRGB.kSubZero(alpha, gamma);
+      const phi = compandDict.sRGB.phi(alpha, gamma);
       const threshold: number = kSubZero;
 
       // apply inverse transformation

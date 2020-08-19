@@ -1,16 +1,12 @@
 import * as Babylon from "babylonjs";
-import { RenderLabelOptions, renderLabel } from "../rendering/billboards";
-import {
-  ColorSpace,
-  ReferenceSpace,
-  XYZ_primaries,
-} from "../../lib/color-space";
+import { RenderLabelOptions, renderLabel } from "@rendering/billboards";
+import { ColorSpace, ColorModel, XYZ_primaries } from "@lib/color-constants";
 import {
   project_XYZ_to_xyY,
   normalizeColor,
   Transform,
   expandRgbColor,
-} from "../../lib/color-transformations";
+} from "@lib/color-transformations";
 
 /*
 Render color profile planes projected into xyY space
@@ -29,7 +25,7 @@ export function renderChromaticityPlane(
     // project the XYZ coordinates to xyY in 3d space
     project_XYZ_to_xyY(
       // transform the primary to xyY space using XYZ as an intermediary
-      Transform(ReferenceSpace.RGB).to(ReferenceSpace.xyY)(
+      Transform(ColorModel.RGB).to(ColorModel.xyY)(
         // convert normalized range of color to bitwise color
         expandRgbColor(primary),
         colorSpace
@@ -42,10 +38,8 @@ export function renderChromaticityPlane(
   // gathers an array of numbers representing a 4 number pair representing
   // r, g, b & a values of a Babylon.Color4 object.
   const colors: number[] = XYZ_primaries.map((primary: number[]) =>
-    Transform(ReferenceSpace.RGB)
-      .to(ReferenceSpace.XYZ)(expandRgbColor(primary), colorSpace, {
-        compand: true,
-      })
+    Transform(ColorModel.RGB)
+      .to(ColorModel.XYZ)(expandRgbColor(primary), colorSpace, undefined, true)
       .concat([1])
   );
 

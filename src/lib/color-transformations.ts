@@ -2,78 +2,45 @@ import { invertMatrix, matrixMultiply, rotateMatrix } from "./math-conversion";
 import {
   ColorSpace,
   Illuminant,
-  ReferenceSpace,
-  illuminant,
-  colorSpace,
-} from "./color-space";
-import { compand, CompandMethod, transferParams } from "./gamma-conversion";
+  ColorModel,
+  illuminantMap,
+  colorSpaceMap,
+  adaptations,
+  normalRanges,
+} from "./color-constants";
+import { compandDict, CompandMethod, transferParams } from "./gamma-conversion";
 import { flatten } from "./math-conversion";
 
-interface ColorTransformOptions {
-  compand?: boolean;
-  referenceIlluminant?: Illuminant;
-  sourceIlluminant?: Illuminant;
-}
-
-// chromatic adatpation matricies
-export const adaptiveMatrix = {
-  vonKries: [
-    [0.4002, 0.7076, -0.0808],
-    [-0.2263, 1.1653, 0.0457],
-    [0, 0, 0.9182],
-  ],
-  bradford: [
-    [0.8951, 0.2664, -0.1614],
-    [-0.7502, 1.7135, 0.0367],
-    [0.0389, -0.0685, 1.0296],
-  ],
-  scale: [
-    [1, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-  ],
-};
-
-export const LuvRanges = {
-  L: [0, 100],
-  U: [-134, 220],
-  V: [-140, 122],
-};
-
-export const LChRanges = {
-  L: [0, 100],
-  C: [0, 300],
-  H: [0, 360],
-};
-
 const transformMap: any = {
-  [ReferenceSpace.LCHuv]: {
-    [ReferenceSpace.LUV]: transform_LCHuv_to_LUV,
-    [ReferenceSpace.RGB]: transform_LCHuv_to_RGB,
+  [ColorModel.LCHuv]: {
+    [ColorModel.LUV]: transform_LCHuv_to_LUV,
+    [ColorModel.RGB]: transform_LCHuv_to_RGB,
   },
-  [ReferenceSpace.LUV]: {
-    [ReferenceSpace.LCHuv]: transform_LUV_to_LCHuv,
-    [ReferenceSpace.XYZ]: transform_LUV_to_XYZ,
+  [ColorModel.LUV]: {
+    [ColorModel.LCHuv]: transform_LUV_to_LCHuv,
+    [ColorModel.XYZ]: transform_LUV_to_XYZ,
   },
-  [ReferenceSpace.RGB]: {
-    [ReferenceSpace.LUV]: transform_RGB_to_LUV,
-    [ReferenceSpace.LCHuv]: transform_RGB_to_LCHuv,
-    [ReferenceSpace.XYZ]: transform_RGB_to_XYZ,
-    [ReferenceSpace.xyY]: transform_RGB_to_xyY,
+  [ColorModel.RGB]: {
+    [ColorModel.LUV]: transform_RGB_to_LUV,
+    [ColorModel.LCHuv]: transform_RGB_to_LCHuv,
+    [ColorModel.XYZ]: transform_RGB_to_XYZ,
+    [ColorModel.xyY]: transform_RGB_to_xyY,
   },
-  [ReferenceSpace.XYZ]: {
-    [ReferenceSpace.LUV]: transform_XYZ_to_LUV,
-    [ReferenceSpace.RGB]: transform_XYZ_to_RGB,
-    [ReferenceSpace.xyY]: transform_XYZ_to_xyY,
+  [ColorModel.XYZ]: {
+    [ColorModel.LUV]: transform_XYZ_to_LUV,
+    [ColorModel.RGB]: transform_XYZ_to_RGB,
+    [ColorModel.xyY]: transform_XYZ_to_xyY,
   },
-  [ReferenceSpace.xyY]: {
-    [ReferenceSpace.XYZ]: transform_xyY_to_XYZ,
+  [ColorModel.xyY]: {
+    [ColorModel.XYZ]: transform_xyY_to_XYZ,
   },
 };
 
-export function Transform(sourceSpace: ReferenceSpace): any {
-  function to(destSpace: ReferenceSpace): any {
-    return transformMap[sourceSpace][destSpace];
+// Provides an accessor to translate one color space into another.
+// Uses transformMap to derive the necessary transformation function.
+export function Transform(sourceModel: ColorModel): any {
+  function to(destModel: ColorModel): any {
+    return transformMap[sourceModel][destModel];
   }
   return {
     to,
@@ -84,91 +51,115 @@ export function Transform(sourceSpace: ReferenceSpace): any {
 // reference page:
 // http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 function applyChromaticAdaptation(
-  s_XYZ: number[],
-  s_illuminant: Illuminant,
-  d_illuminant: Illuminant
+  colorXyz: number[],
+  sourceIlluminant: Illuminant,
+  referenceIlluminant: Illuminant
 ): number[] {
   // white point is the same, no adaptation is necessary
-  if (s_illuminant === d_illuminant) {
-    return s_XYZ;
+  if (sourceIlluminant === referenceIlluminant) {
+    return colorXyz;
   }
   // otherwise calculate adaptation between whitespace values and apply to XYZ color
   else {
-    const s_whitepoint: number[] = illuminant[s_illuminant];
-    const d_whitepoint: number[] = illuminant[d_illuminant];
-
-    // define cone response primaries from a source illuminant
-    const sourceCrsp: number[] = flatten(
-      matrixMultiply(adaptiveMatrix.bradford, rotateMatrix([s_whitepoint]))
+    const s_whitepoint: number[] | undefined = illuminantMap.get(
+      sourceIlluminant
+    );
+    const d_whitepoint: number[] | undefined = illuminantMap.get(
+      referenceIlluminant
     );
 
-    // define cone response primaries from a destination illuminant (d50)
-    const destCrsp: number[] = flatten(
-      matrixMultiply(adaptiveMatrix.bradford, rotateMatrix([d_whitepoint]))
-    );
+    // check to ensure both whitepoints are valid
+    if (s_whitepoint && d_whitepoint) {
+      // define cone response primaries from a source illuminant
+      const sourceCrsp: number[] = flatten(
+        matrixMultiply(adaptations.bradford, rotateMatrix([s_whitepoint]))
+      );
 
-    // define the cone response matrix
-    const crspMatrix: number[][] = [
-      [destCrsp[0] / sourceCrsp[0], 0, 0],
-      [0, destCrsp[1] / sourceCrsp[1], 0],
-      [0, 0, destCrsp[2] / sourceCrsp[2]],
-    ];
+      // define cone response primaries from a destination illuminant (d50)
+      const destCrsp: number[] = flatten(
+        matrixMultiply(adaptations.bradford, rotateMatrix([d_whitepoint]))
+      );
 
-    // calculate the transformation matrix
-    const tMatrix: number[][] = matrixMultiply(
-      matrixMultiply(invertMatrix(adaptiveMatrix.bradford), crspMatrix),
-      adaptiveMatrix.bradford
-    );
+      // define the cone response matrix
+      const crspMatrix: number[][] = [
+        [destCrsp[0] / sourceCrsp[0], 0, 0],
+        [0, destCrsp[1] / sourceCrsp[1], 0],
+        [0, 0, destCrsp[2] / sourceCrsp[2]],
+      ];
 
-    // convert the adapted XYZ values
-    return flatten(
-      matrixMultiply(tMatrix, rotateMatrix([s_XYZ]))
-    ).map((component: number) => (isNaN(component) ? 0 : component));
+      // calculate the transformation matrix
+      const tMatrix: number[][] = matrixMultiply(
+        matrixMultiply(invertMatrix(adaptations.bradford), crspMatrix),
+        adaptations.bradford
+      );
+
+      // convert the adapted XYZ values
+      return flatten(
+        matrixMultiply(tMatrix, rotateMatrix([colorXyz]))
+      ).map((component: number) => (isNaN(component) ? 0 : component));
+    } else {
+      // otherwise whitepoints came up null, throw an error
+      throw new Error(
+        `Error attempting to apply chromatic adaptation: Source or destination whitepoint was undefined. \nsource whitepoint: ${s_whitepoint}, destination whitepoint: ${d_whitepoint}`
+      );
+    }
   }
 }
 
 // get the matrix required to transform an RGB space to linear space
 // Mote: the reverse transform can use the inverse of the resulting matrix
-function calculate_RGB_to_XYZ_transformation_matrix(
-  toColorSpace: ColorSpace,
-  r_illuminant?: Illuminant
+function deriveRgbTransformationMatrixFor(
+  colorSpace: ColorSpace,
+  referenceIlluminant?: Illuminant
 ): number[][] {
   // deconstruct profile to gather primaries in xy form and reference illuminant
-  const { primaries } = colorSpace[toColorSpace];
+  const { primaries } = colorSpaceMap.get(colorSpace) || {};
 
-  // look up the illuminant based on colorspace or optional param
-  const referenceIlluminant: number[] =
-    illuminant[r_illuminant || colorSpace[toColorSpace].illuminant];
+  // grab the whitepoint vertex for the supplied illuminant
+  const whitepoint: number[] | undefined =
+    referenceIlluminant && illuminantMap.has(referenceIlluminant)
+      ? illuminantMap.get(referenceIlluminant)
+      : undefined;
 
-  /* c
-  onstruct xyz matrix from xyY primary values. Required for the calculation 
-  to determine the transformation matrix when moving from an RGB color space to 
-  reference XYZ space. Source of this calculation can be found at: 
-  http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
-  */
-  const xyzMatrix: number[][] = rotateMatrix(
-    primaries.map((primary: number[]) => [
-      primary[0] / primary[1],
-      1,
-      (1 - primary[0] - primary[1]) / primary[1],
-    ])
-  );
+  if (primaries && whitepoint) {
+    /*
+    onstruct xyz matrix from xyY primary values. Required for the calculation 
+    to determine the transformation matrix when moving from an RGB color space to 
+    reference XYZ space. Source of this calculation can be found at: 
+    http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+    */
+    const xyzMatrix: number[][] = rotateMatrix(
+      primaries.map((primary: number[]) => [
+        primary[0] / primary[1],
+        1,
+        (1 - primary[0] - primary[1]) / primary[1],
+      ])
+    );
 
-  // calculate source RGB from matrix M and the illuminant
-  const sourceRGB: number[] = flatten(
-    matrixMultiply(invertMatrix(xyzMatrix), rotateMatrix([referenceIlluminant]))
-  );
+    // calculate source RGB from matrix M and the illuminant
+    const sourceRGB: number[] = flatten(
+      matrixMultiply(invertMatrix(xyzMatrix), rotateMatrix([whitepoint]))
+    );
 
-  // multiply sourceRGB with xyzMatrix values to get the transform matrix M
-  const tMatrix: number[][] = xyzMatrix.map((component_xyz: number[]) =>
-    component_xyz.map(
-      (component: number, index: number) => component * sourceRGB[index]
-    )
-  );
+    // multiply sourceRGB with xyzMatrix values to get the transform matrix M
+    const tMatrix: number[][] = xyzMatrix.map((component_xyz: number[]) =>
+      component_xyz.map(
+        (component: number, index: number) => component * sourceRGB[index]
+      )
+    );
 
-  return tMatrix;
+    // return the derived matrix
+    return tMatrix;
+  } else {
+    // otherwise an issue was encountered, throw an error.
+    throw new Error(
+      `Could not derive RGB Transformation Matrix. Either of the required parameters 'primaries' or 'whitepoint' was undefined`
+    );
+  }
 }
 
+// given a normalized color touple, expand to represent an array of RGB primarmies.
+// Optionally provide the desired bit depth (default to 8 bit color)
 export function expandRgbColor(
   [Xn, Yn, Zn]: number[],
   bitDepth: number = 8
@@ -177,6 +168,7 @@ export function expandRgbColor(
   return [Xn * coeff, Yn * coeff, Zn * coeff];
 }
 
+// given a pair of colors, calculate the contrast ratio between them
 export function findContrastRatio(c1_XYZ: number[], c2_XYZ: number[]): number {
   const [x1, y1, z1] = c1_XYZ;
   const [x2, y2, z2] = c2_XYZ;
@@ -192,7 +184,8 @@ export function normalizeColor([X, Y, Z]: number[]): number[] {
   return [X / sum, Y / sum, Z / sum];
 }
 
-export function normalizeRGBColor(
+// takes a color touple of some bit depth and returns a normalized range for each component
+export function normalizeRgbColor(
   [x, y, z]: number[],
   bitDepth: number = 8
 ): number[] {
@@ -200,19 +193,21 @@ export function normalizeRGBColor(
   return [x / denominator, y / denominator, z / denominator];
 }
 
+// normalize Luv components within a range of 0-1
 export function normalizeLuvColor([L, u, v]: number[]): number[] {
   return [
-    Math.abs(L / (LuvRanges.L[1] - LuvRanges.L[0])),
-    Math.abs(u / (LuvRanges.U[1] - LuvRanges.U[0])),
-    Math.abs(v / (LuvRanges.V[1] - LuvRanges.V[0])),
+    Math.abs(L / (normalRanges[ColorModel.LUV].L[1] - normalRanges[ColorModel.LUV].L[0])),
+    Math.abs(u / (normalRanges[ColorModel.LUV].U[1] - normalRanges[ColorModel.LUV].U[0])),
+    Math.abs(v / (normalRanges[ColorModel.LUV].V[1] - normalRanges[ColorModel.LUV].V[0])),
   ];
 }
 
+// normalize LCh components within a range of 0-1
 export function normalizeLchColor([L, C, h]: number[]): number[] {
   return [
-    L / (LChRanges.L[1] - LChRanges.L[0]),
-    C / (LChRanges.C[1] - LChRanges.C[0]),
-    h / (LChRanges.H[1] - LChRanges.H[0]),
+    L / (normalRanges[ColorModel.LCHuv].L[1] - normalRanges[ColorModel.LCHuv].L[0]),
+    C / (normalRanges[ColorModel.LCHuv].C[1] - normalRanges[ColorModel.LCHuv].C[0]),
+    h / (normalRanges[ColorModel.LCHuv].H[1] - normalRanges[ColorModel.LCHuv].H[0]),
   ];
 }
 
@@ -231,14 +226,15 @@ export function transform_LCHuv_to_LUV([L, C, h]: number[]): number[] {
 }
 
 export function transform_LCHuv_to_RGB(
-  lch_color: number[],
+  colorLch: number[],
   referenceIlluminant: Illuminant = Illuminant.D50,
-  rgbSpace: ColorSpace
+  colorSpace: ColorSpace
 ): number[] {
   return transform_XYZ_to_RGB(
-    transform_LUV_to_XYZ(transform_LCHuv_to_LUV(lch_color), Illuminant.D65),
-    rgbSpace,
-    { referenceIlluminant, compand: true }
+    transform_LUV_to_XYZ(transform_LCHuv_to_LUV(colorLch), Illuminant.D65),
+    colorSpace,
+    referenceIlluminant,
+    true
   ).map((c) => {
     c = isNaN(c) ? 0 : c;
     let cRound: number = Math.round(c * 255);
@@ -260,56 +256,59 @@ export function transform_LUV_to_XYZ(
   [L, u, v]: number[],
   referenceIlluminant: Illuminant
 ): number[] {
-  const [Xr, Yr, Zr] = illuminant[referenceIlluminant];
+  if (illuminantMap.has(referenceIlluminant)) {
+    const [Xr, Yr, Zr] = illuminantMap.get(referenceIlluminant) as number[];
 
-  const subDenom: number = Xr + 15 * Yr + 3 * Zr;
-  const uSub: number = (4 * Xr) / subDenom;
-  const vSub: number = (9 * Yr) / subDenom;
+    const subDenom: number = Xr + 15 * Yr + 3 * Zr;
+    const uSub: number = (4 * Xr) / subDenom;
+    const vSub: number = (9 * Yr) / subDenom;
 
-  const threshold: number = 216 / 24389;
-  const kappa: number = 24389 / 27;
+    const threshold: number = 216 / 24389;
+    const kappa: number = 24389 / 27;
 
-  const Y: number =
-    L > threshold * kappa ? Math.pow((L + 16) / 116, 3) : L / kappa;
+    const Y: number =
+      L > threshold * kappa ? Math.pow((L + 16) / 116, 3) : L / kappa;
 
-  const a: number = (1 / 3) * ((52 * L) / (u + 13 * L * uSub) - 1);
-  const b: number = -5 * Y;
-  const c: number = -1 / 3;
-  const d: number = Y * ((39 * L) / (v + 13 * L * vSub) - 5);
+    const a: number = (1 / 3) * ((52 * L) / (u + 13 * L * uSub) - 1);
+    const b: number = -5 * Y;
+    const c: number = -1 / 3;
+    const d: number = Y * ((39 * L) / (v + 13 * L * vSub) - 5);
 
-  let X: number = a - c === 0 ? 0 : (d - b) / (a - c);
-  const Z: number = X * a + b;
+    let X: number = a - c === 0 ? 0 : (d - b) / (a - c);
+    const Z: number = X * a + b;
 
-  return [X, Y, Z];
+    return [X, Y, Z];
+  } else {
+    throw new Error(
+      `Error transforming LUV to XYZ model: Reference Illuminant was undefined`
+    );
+  }
 }
 
 export function transform_RGB_to_LCHuv(
-  rgb_color: number[],
+  colorRgb: number[],
   fromColorSpace: ColorSpace,
   referenceIlluminant: Illuminant = Illuminant.D50,
   compand: boolean = false
 ): number[] {
   return transform_LUV_to_LCHuv(
-    transform_RGB_to_LUV(
-      rgb_color,
-      fromColorSpace,
-      referenceIlluminant,
-      compand
-    )
+    transform_RGB_to_LUV(colorRgb, fromColorSpace, referenceIlluminant, compand)
   );
 }
 
 export function transform_RGB_to_LUV(
-  rgb_color: number[],
+  colorRgb: number[],
   fromColorSpace: ColorSpace,
   referenceIlluminant: Illuminant = Illuminant.D50,
   compand: boolean = false
 ) {
   return transform_XYZ_to_LUV(
-    transform_RGB_to_XYZ(rgb_color, fromColorSpace, {
+    transform_RGB_to_XYZ(
+      colorRgb,
+      fromColorSpace,
       referenceIlluminant,
-      compand: compand,
-    }),
+      compand
+    ),
     referenceIlluminant
   );
 }
@@ -318,57 +317,66 @@ export function transform_RGB_to_LUV(
 // Can optionally take in parameters to determine illuminants for chromatic adaptation
 // and a boolean for whether to apply gamma correction to the final number
 export function transform_RGB_to_XYZ(
-  rgb_color: number[],
-  toColorSpace: ColorSpace,
-  options: ColorTransformOptions = {}
+  colorRgb: number[],
+  colorSpace: ColorSpace,
+  referenceIlluminant: Illuminant = Illuminant.D50,
+  compand?: boolean
 ): number[] {
-  // set defaults for source/ref illuminants if not provided in options
-  const {
-    sourceIlluminant = colorSpace[toColorSpace].illuminant,
-    referenceIlluminant = colorSpace[toColorSpace].illuminant,
-  } = options;
+  const sourceIlluminant: Illuminant | undefined = colorSpaceMap.get(colorSpace)
+    ?.illuminant;
 
-  // normalize rgb values
-  const normalized_color: number[] = normalizeRGBColor(rgb_color);
+  // a valid source illuminant is a function dependency
+  if (sourceIlluminant) {
+    // normalize rgb values
+    const normalized_color: number[] = normalizeRgbColor(colorRgb);
 
-  // get reference for which method the destination color space uses for companding
-  const compandMethod: CompandMethod = transferParams[toColorSpace].method;
+    // get reference for which method the destination color space uses for companding
+    const compandMethod: CompandMethod = transferParams[colorSpace].method;
 
-  // get reference to the color space dependent nonLinear method
-  const compandFunc: any = compand[compandMethod].linear;
+    // get reference to the color space dependent nonLinear method
+    const compandFunc: any = compandDict[compandMethod].linear;
 
-  // get the computed linear RGB color based on the compand function
-  const linearColor: number[] = compandFunc(normalized_color, toColorSpace);
+    // get the computed linear RGB color based on the compand function
+    const linearColor: number[] = compandFunc(normalized_color, colorSpace);
 
-  // get the proper transform matrix based on the destination color space
-  const transformMatrix: number[][] = calculate_RGB_to_XYZ_transformation_matrix(
-    toColorSpace
-  );
+    // get the proper transform matrix based on the destination color space
+    const transformMatrix: number[][] = deriveRgbTransformationMatrixFor(
+      colorSpace,
+      referenceIlluminant
+    );
 
-  // compute the color in XYZ space
-  const transformed_color: number[] = flatten(
-    matrixMultiply(
-      transformMatrix,
-      rotateMatrix([options?.compand ? linearColor : normalized_color])
-    )
-  );
+    // compute the color in XYZ space
+    const transformed_color: number[] = flatten(
+      matrixMultiply(
+        transformMatrix,
+        rotateMatrix([compand ? linearColor : normalized_color])
+      )
+    );
 
-  // perform chromatic adaptation transformation in case the illuminants of the
-  // reference space and rgb space are different.
-  return applyChromaticAdaptation(
-    transformed_color,
-    sourceIlluminant,
-    referenceIlluminant
-  );
+    // perform chromatic adaptation transformation in case the illuminants of the
+    // reference space and rgb space are different.
+    return applyChromaticAdaptation(
+      transformed_color,
+      sourceIlluminant,
+      Illuminant.D50
+    );
+
+    // without a source Illuminant, throw an error
+  } else {
+    throw new Error(
+      `Error in transforming RGB to XYZ model: source illuminant is undefined`
+    );
+  }
 }
 
 export function transform_RGB_to_xyY(
-  rgb_color: number[],
-  toColorSpace: ColorSpace,
-  options: ColorTransformOptions = {}
+  colorRgb: number[],
+  colorSpace: ColorSpace,
+  referenceIlluminant: Illuminant = Illuminant.D50,
+  compand?: boolean
 ): number[] {
   return transform_XYZ_to_xyY(
-    transform_RGB_to_XYZ(rgb_color, toColorSpace, options)
+    transform_RGB_to_XYZ(colorRgb, colorSpace, referenceIlluminant, compand)
   );
 }
 
@@ -379,72 +387,86 @@ export function transform_xyY_to_XYZ([x, y, Y]: number[]): number[] {
 
 export function transform_XYZ_to_LUV(
   XYZ_color: number[],
-  referenceIlluminant: Illuminant
+  referenceIlluminant: Illuminant = Illuminant.D50
 ): number[] {
-  // constants used in conversion standard
-  const threshold = 216 / 24389;
-  const coeff = 24389 / 27;
+  const whitepoint: number[] | undefined = illuminantMap.get(
+    referenceIlluminant
+  );
 
-  // destructure reference white and source color primaries
-  const [Xr, Yr, Zr]: number[] = illuminant[
-    Object(Illuminant)[referenceIlluminant]
-  ];
-  const [X, Y, Z]: number[] = XYZ_color;
+  if (!whitepoint) {
+    throw new Error(
+      `Error in transforming XYZ to LUV model: Undefined reference whitepoint`
+    );
+  } else {
+    // constants used in conversion standard
+    const threshold = 216 / 24389;
+    const coeff = 24389 / 27;
 
-  // derive prime values required for Luv calculation
-  const yr = Y / Yr;
-  const prime_denominator = X + 15 * Y + 3 * Z;
-  const ref_prime_denominator = Xr + 15 * Yr + 3 * Zr;
-  const u_prime = (4 * X) / prime_denominator || 0;
-  const v_prime = (9 * Y) / prime_denominator || 0;
-  const ur_prime = (4 * Xr) / ref_prime_denominator;
-  const vr_prime = (9 * Yr) / ref_prime_denominator;
+    // destructure reference white and source color primaries
+    const [Xr, Yr, Zr]: number[] = whitepoint;
+    const [X, Y, Z]: number[] = XYZ_color;
 
-  // compute Luv components from derived values
-  const L = yr > threshold ? 116 * Math.cbrt(yr) - 16 : coeff * yr;
-  const u = 13 * L * (u_prime - ur_prime);
-  const v = 13 * L * (v_prime - vr_prime);
+    // derive prime values required for Luv calculation
+    const yr = Y / Yr;
+    const prime_denominator = X + 15 * Y + 3 * Z;
+    const ref_prime_denominator = Xr + 15 * Yr + 3 * Zr;
+    const u_prime = (4 * X) / prime_denominator || 0;
+    const v_prime = (9 * Y) / prime_denominator || 0;
+    const ur_prime = (4 * Xr) / ref_prime_denominator;
+    const vr_prime = (9 * Yr) / ref_prime_denominator;
 
-  // return the transformed color in Luv format
-  return [L, u, v];
+    // compute Luv components from derived values
+    const L = yr > threshold ? 116 * Math.cbrt(yr) - 16 : coeff * yr;
+    const u = 13 * L * (u_prime - ur_prime);
+    const v = 13 * L * (v_prime - vr_prime);
+
+    // return the transformed color in Luv format
+    return [L, u, v];
+  }
 }
 
 // Inverse transformation of transform_RGB_to_XYZ with the same options available
 export function transform_XYZ_to_RGB(
   XYZ_color: number[],
-  toColorSpace: ColorSpace,
-  options: ColorTransformOptions = {}
+  colorSpace: ColorSpace,
+  referenceIlluminant: Illuminant = Illuminant.D50,
+  compand?: boolean
 ): number[] {
-  const {
-    sourceIlluminant = colorSpace[toColorSpace].illuminant,
-    referenceIlluminant = colorSpace[toColorSpace].illuminant,
-  } = options;
+  const sourceIlluminant: Illuminant | undefined = colorSpaceMap.get(colorSpace)
+    ?.illuminant;
 
-  // get reference for which method the destination color space uses for companding
-  const compandMethod: CompandMethod = transferParams[toColorSpace].method;
+  if (!sourceIlluminant) {
+    throw new Error(
+      `Error transforming XYZ to RGB model: Source Illuminant was undefined`
+    );
+  } else {
+    // get reference for which method the destination color space uses for companding
+    const compandMethod: CompandMethod = transferParams[colorSpace].method;
 
-  // get reference to the color space dependent nonLinear method
-  const compandFunc: any = compand[compandMethod].nonLinear;
+    // get reference to the color space dependent nonLinear method
+    const compandFunc: any = compandDict[compandMethod].nonLinear;
 
-  // get the proper transform matrix based on the destination color space
-  const transformMatrix: number[][] = calculate_RGB_to_XYZ_transformation_matrix(
-    toColorSpace
-  );
+    // get the proper transform matrix based on the destination color space
+    const transformMatrix: number[][] = deriveRgbTransformationMatrixFor(
+      colorSpace,
+      referenceIlluminant
+    );
 
-  const adapted_color: number[] = applyChromaticAdaptation(
-    XYZ_color,
-    sourceIlluminant,
-    referenceIlluminant
-  );
+    const adapted_color: number[] = applyChromaticAdaptation(
+      XYZ_color,
+      sourceIlluminant,
+      referenceIlluminant
+    );
 
-  const linearColor: number[] = flatten(
-    matrixMultiply(invertMatrix(transformMatrix), rotateMatrix([adapted_color]))
-  );
+    const linearColor: number[] = flatten(
+      matrixMultiply(
+        invertMatrix(transformMatrix),
+        rotateMatrix([adapted_color])
+      )
+    );
 
-  return compandFunc(
-    options?.compand ? linearColor : adapted_color,
-    toColorSpace
-  );
+    return compandFunc(compand ? linearColor : adapted_color, colorSpace);
+  }
 }
 
 // convert XYZ color to xyY representation

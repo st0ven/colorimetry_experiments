@@ -1,32 +1,47 @@
+// a custom implementation of the esnext supported Array.flat() method.
+// Takes an array of any depth, and provided an optional maxDepth parameter,
+// will return an array flattened to the desired depth, or if none provided,
+// a 1-dimensional list of the original array structure.
 export function flatten(array: any[], maxDepth: number = 0): any[] {
+  // iterate through array children via invokable recursive function
   return (function iterateDepth(
     array: any[],
     flatArray: any[] = [],
     depth: number
   ): any[] {
     array.forEach((item: any) => {
+      // check if this item in the array is also an array
+      // ensure the max depth has not been met
       if (item instanceof Array && depth < (maxDepth || Infinity)) {
         iterateDepth(item, flatArray, depth + 1);
-      } else {
+      } 
+      // this is the deepest array item for this child.
+      else {
         flatArray.push(item);
       }
     });
+    // recursion is complete, return the flattened result
     return flatArray;
   })(array, [], maxDepth);
 }
 
+// convenience method to quickly convert Rads to Degrees
 export function convertRadiansToDegrees(rad: number): number {
   return rad * (180 / Math.PI);
 }
 
+// a convenience function to quickly convert Degrees to Rads
 export function convertDegreesToRadians(degree: number): number {
   return degree * (Math.PI / 180);
 }
 
+// a convenience function to scale the values in a 2d matrix by a specified multiplier
 export function scaleMatrix(coeff: number, matrix: number[][]): number[][] {
   return matrix.map((row: number[]) => row.map((j: number) => j * coeff));
 }
 
+// a method which expects two 2D matrices to multiply. m1 and m2 must be of
+// a compatible 'shape' relative to each other, else an error is thrown.
 export function matrixMultiply(m1: number[][], m2: number[][]): number[][] {
   if (m1.length && m2.length && m1[0].length === m2.length) {
     return Array(m1.length)

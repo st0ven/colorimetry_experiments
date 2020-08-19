@@ -1,13 +1,14 @@
 {
 	"compilerOptions": {
 		"paths": {
-			"@client/*": ["./src/client/*"],
-			"@api/*": ["./src/client/api/*"],
-			"@components/*": ["./src/client/components/*"],
-			"@containers/*": ["./src/client/containers/*"],
-			"@data/*": ["./src/client/data/*"],
-			"@hooks/*": ["./src/client/hooks/*"],
-			"@rendering/*": ["./src/client/rendering/*"],
+			"@client/*": ["src/client/*"],
+			"@api/*": ["src/client/api/*"],
+			"@components/*": ["src/client/components/*"],
+			"@containers/*": ["src/client/containers/*"],
+			"@lib/*": ["src/lib/*"],
+			"@res/*": ["src/client/res/*"],
+			"@hooks/*": ["src/client/hooks/*"],
+			"@rendering/*": ["src/client/rendering/*"],
 		}
 	}
 }

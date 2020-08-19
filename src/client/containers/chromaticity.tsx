@@ -1,18 +1,18 @@
 import React, { useState, useCallback, ChangeEvent } from "react";
 import * as Babylon from "babylonjs";
-import styles from "./chromaticity-visualization.module.scss";
-import { ColorSpace } from "../../lib/color-space";
-import { Graph3d, GraphType } from "../components/graph-3d";
-import { Select } from "../components/select";
-import { ColorSpaceOptions } from "../components/color-space-options";
-import { renderHemiLight } from "../rendering/lights";
+import styles from "./chromaticity.module.scss";
+import { ColorSpace } from "@lib/color-constants";
+import { Graph3d, GraphType } from "@components/graph-3d";
+import { Select } from "@components/select";
+import { ColorSpaceOptions } from "@components/color-space-options";
+import { renderHemiLight } from "@rendering/lights";
 import {
   renderChromaticityPlane,
   renderSpectralLocusXYZ,
-} from "../rendering/rgb-chromaticity";
+} from "@rendering/rgb-chromaticity";
 
 // import CMF data CIE 1931 at 2 degrees - 0.1nm
-const XYZ_data = require("../data/cmf_1931_XYZ_0.1nm.csv");
+const XYZ_data = require("@res/cmf_1931_XYZ_0.1nm.csv");
 
 // function to render the spectral locus with a baked in arguments.
 // This function is static and does not require any user-defined inputs
