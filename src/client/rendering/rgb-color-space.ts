@@ -1,8 +1,8 @@
 import * as Babylon from "babylonjs";
 import { sceneEntityNames } from "@res/rendering-constants";
 
-const meshDiffuseOpacity: number = 1;
-const wireframeDiffuseOpacity: number = 0;
+const meshDiffuseOpacity: number = 0.075;
+const wireframeDiffuseOpacity: number = 0.25;
 
 // Render profile color space in XYZ space
 export function renderColorSpace(
@@ -27,7 +27,7 @@ export function renderColorSpace(
     new Babylon.StandardMaterial(material.wireframe, scene);
 
   // set material properties
-  materialWireframe.emissiveColor = new Babylon.Color3(1, 1, 1);
+  //materialWireframe.emissiveColor = new Babylon.Color3(1, 1, 1);
   materialWireframe.useEmissiveAsIllumination = true;
   materialWireframe.alpha = wireframeDiffuseOpacity;
   materialWireframe.wireframe = true;

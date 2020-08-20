@@ -170,7 +170,7 @@ export const normalRanges = {
 
   [ColorModel.LCHuv]: {
     L: [0, 100],
-    C: [0, 500],
+    C: [0, 400],
     H: [0, 360],
   },
 };

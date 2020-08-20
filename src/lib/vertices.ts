@@ -1,8 +1,15 @@
-import { ColorModel, ColorSpace, Illuminant } from "./color-constants";
+import {
+  ColorModel,
+  ColorSpace,
+  Illuminant,
+  colorSpaceMap,
+} from "./color-constants";
 import {
   Transform,
   normalizeLchColor,
   expandRgbColor,
+  deriveChromaticAdaptationMatrixFor,
+  deriveRgbTransformationMatrixFor,
 } from "./color-transformations";
 import { VertexData, Axis } from "babylonjs";
 import { flatten } from "./math-conversion";
@@ -50,7 +57,9 @@ export function generatePlaneVertices(
 // a cube of evenly distributed vertices across each face. This cube geometry can
 // then be subsequently transformed to represent color space geometry across various
 // color spaces/models.
-export function generateColorSpaceGeometry(divisions: number = 1): number[][][] {
+export function generateColorSpaceGeometry(
+  divisions: number = 1
+): number[][][] {
   const planeVertices: number[][][] = [];
 
   for (let i: number = 0; i <= 2; i++) {
@@ -63,7 +72,7 @@ export function generateColorSpaceGeometry(divisions: number = 1): number[][][] 
   return planeVertices;
 }
 
-// given a position in XYZ space, calculate the appropriate RGB value to 
+// given a position in XYZ space, calculate the appropriate RGB value to
 // assign to that vertex.
 function getColorFromVertex(
   vertex: number[],
@@ -91,7 +100,7 @@ function getFacetsFromVertex(i: number, offset: number): number[] {
   return flatten([facetA, facetB]);
 }
 
-// given a position in XYZ space, map where to render that position based on 
+// given a position in XYZ space, map where to render that position based on
 // the desired reference color model. This can either be calculated as polar or
 // euclidean coordinates based on the desired color model to visualize the color space.
 function getPositionFromVertex(
@@ -101,9 +110,37 @@ function getPositionFromVertex(
   targetColorModel: ColorModel,
   referenceIlluminant: Illuminant
 ): number[] {
+  const sourceIlluminant: Illuminant | undefined = colorSpaceMap.get(
+    sourceColorSpace
+  )?.illuminant;
+
+  const commonTransformationArgs: any[] = [
+    vertex,
+    sourceColorSpace,
+    referenceIlluminant,
+  ];
+
+  const transformationArgs: any =
+    targetColorModel === ColorModel.RGB && sourceIlluminant
+      ? [
+          ...commonTransformationArgs,
+          {
+            compand: false,
+            useAdaptiveMatrix: deriveChromaticAdaptationMatrixFor(
+              sourceIlluminant,
+              Illuminant.D50
+            ),
+            useTransformationMatrix: deriveRgbTransformationMatrixFor(
+              sourceColorSpace,
+              referenceIlluminant
+            ),
+          },
+        ]
+      : commonTransformationArgs;
+
   const transformedColor: number[] = Transform(sourceColorModel).to(
     targetColorModel
-  )(vertex, sourceColorSpace, referenceIlluminant);
+  )(...transformationArgs);
 
   const mappedVertex: number[] =
     targetColorModel === ColorModel.LCHuv

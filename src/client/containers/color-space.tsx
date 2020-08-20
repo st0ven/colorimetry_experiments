@@ -16,6 +16,7 @@ import { renderColorSpace } from "@rendering/rgb-color-space";
 import { renderColorIndicator } from "@rendering/color-indicator";
 import { AxisRenderOptions } from "@rendering/axes";
 import { adjustCameraTarget } from "@rendering/camera";
+import { normalRanges } from "@lib/color-constants"
 
 const axisOptionsL: AxisRenderOptions = {
   scalarMin: 0,
@@ -32,7 +33,7 @@ const axisOptionsC: AxisRenderOptions = {
   max: 1,
   floatPoint: 0,
   scalarMin: 0,
-  scalarMax: 200,
+  scalarMax: normalRanges[ColorModel.LCHuv].C[1],
 };
 
 const axisOptionsH: AxisRenderOptions = {
@@ -184,7 +185,7 @@ export function RGBVisualization() {
             toColorModel === ColorModel.LCHuv ? [0, 0.5, 0] : [0.5, 0.5, 0.5];
 
           // determine zoom lock limit based on euclidean vs polar coordinates
-          const limitLock: number = toColorModel === ColorModel.LCHuv ? 2.5 : 2;
+          const limitLock: number = toColorModel === ColorModel.LCHuv ? 2.25 : 2;
 
           // adjust the camera
           adjustCameraTarget(

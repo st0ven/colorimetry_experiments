@@ -4,6 +4,13 @@ import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import { AxisRenderOptions, renderAxes } from "@rendering/axes";
 
+const canvasBackgroundColor: Babylon.Color4 = new Babylon.Color4(
+  0.23,
+  0.2,
+  0.27,
+  1
+);
+
 type RenderMethod = (scene: Babylon.Scene) => void;
 
 export enum GraphType {
@@ -62,7 +69,7 @@ export function Graph3d({
       // create scene instance and set some initial properties
       sceneRef.current = new Babylon.Scene(engineRef.current);
       sceneRef.current.shadowsEnabled = false;
-      sceneRef.current.clearColor = new Babylon.Color4(0.05, 0.03, 0.15, 1);
+      sceneRef.current.clearColor = canvasBackgroundColor
 
       // create scene camera and point it to origin/center
       cameraRef.current = new Babylon.ArcRotateCamera(
