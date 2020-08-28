@@ -3,6 +3,20 @@
 //const { addBeforeLoader } = require("@craco/craco/lib/loaders");
 const { loaderByName, addBeforeLoader } = require("@craco/craco");
 const path = require("path");
+const TsConfigPathsPlugin = require("tsconfig-paths-webpack-plugin");
+
+const resolveExtensions = [
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".d.ts",
+  ".csv",
+  ".css",
+  ".module.css",
+  ".scss",
+  ".module.scss",
+];
 
 module.exports = {
   webpack: {
@@ -32,18 +46,13 @@ module.exports = {
       return webpackConfig;
     },
     resolve: {
-      extensions: [
-        ".js",
-        ".jsx",
-        ".ts",
-        ".tsx",
-        ".d.ts",
-        ".csv",
-        ".css",
-        ".module.css",
-        ".scss",
-        ".module.scss",
+      plugins: [
+        new TsConfigPathsPlugin({
+          //configFile: path.resolve(__dirname, "./tsconfig-server.json"),
+          extensions: resolveExtensions,
+        }),
       ],
+      extensions: resolveExtensions,
     },
   },
 };

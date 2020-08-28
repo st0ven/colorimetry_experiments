@@ -1,11 +1,13 @@
 import React, { useState, useCallback, ChangeEvent } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./chromaticity.module.scss";
-import { ColorSpace } from "@lib/color-constants";
-import { Graph3d, GraphType } from "@components/graph-3d";
+import { ColorSpace, ColorModel } from "@lib/enums";
+import { Graph3d } from "@components/graph-3d";
+import { GraphType } from "@lib/enums";
 import { Select } from "@components/select";
 import { ColorSpaceOptions } from "@components/color-space-options";
 import { renderHemiLight } from "@rendering/lights";
+import { axisOptionsMap } from "@lib/constants.axes";
 import {
   renderChromaticityPlane,
   renderSpectralLocusXYZ,
@@ -58,6 +60,7 @@ export function ChromaticityVisualization() {
 
       <Graph3d
         type={GraphType.box}
+        axisOptions={axisOptionsMap.get(ColorModel.XYZ)}
         renderMethods={[
           renderHemiLight,
           render_spectral_locus,

@@ -1,12 +1,12 @@
 import * as Babylon from "babylonjs";
 import { RenderLabelOptions, renderLabel } from "@rendering/billboards";
-import { ColorSpace, ColorModel, XYZ_primaries } from "@lib/color-constants";
+import { XYZ_primaries } from "@lib/constants.color";
+import { ColorModel, ColorSpace } from "@lib/enums";
 import {
   project_XYZ_to_xyY,
-  normalizeColor,
   Transform,
   expandRgbColor,
-} from "@lib/color-transformations";
+} from "@lib/transform.colors";
 
 /*
 Render color profile planes projected into xyY space
@@ -96,10 +96,11 @@ export function renderSpectralLocusXYZ(
         (datum: Array<string>) =>
           // normalize to a 3d plane as a vector3 array
           new Babylon.Vector3(
-            ...normalizeColor(
+            //...normalizeAnyColor(
               // extract wavelength info and coerce into numeric form
-              datum.slice(1).map((point: string) => Number(point))
-            )
+              ...datum.slice(1).map((point: string) => Number(point)),
+            //  ColorModel.RGB
+           // )
           )
       );
 

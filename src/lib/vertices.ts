@@ -1,18 +1,14 @@
+import { ColorModel, ColorSpace, Illuminant, GraphType } from "@lib/enums";
+import { colorModelMap, colorSpaceMap } from "@lib/constants.color";
 import {
-  ColorModel,
-  ColorSpace,
-  Illuminant,
-  colorSpaceMap,
-} from "./color-constants";
-import {
+  normalizeAnyColor,
   Transform,
-  normalizeLchColor,
   expandRgbColor,
   deriveChromaticAdaptationMatrixFor,
   deriveRgbTransformationMatrixFor,
-} from "./color-transformations";
+} from "./transform.colors";
 import { VertexData, Axis } from "babylonjs";
-import { flatten } from "./math-conversion";
+import { flatten } from "./transform.matrices";
 
 // Generate a matrix of vertices representing a plane with a fixed component c.
 // Provide the axis that should remain fixed. The additional 2 dimentional components
@@ -76,11 +72,11 @@ export function generateColorSpaceGeometry(
 // assign to that vertex.
 function getColorFromVertex(
   vertex: number[],
-  useProfile: ColorSpace = ColorSpace.sRGB,
+  sourceColorSpace: ColorSpace = ColorSpace.sRGB,
   referenceIlluminant: Illuminant = Illuminant.D65
 ): number[] {
   return Transform(ColorModel.RGB)
-    .to(ColorModel.XYZ)(vertex, useProfile, referenceIlluminant)
+    .to(ColorModel.XYZ)(vertex, sourceColorSpace, referenceIlluminant)
     .concat([1]);
 }
 
@@ -110,42 +106,64 @@ function getPositionFromVertex(
   targetColorModel: ColorModel,
   referenceIlluminant: Illuminant
 ): number[] {
+  // get the default source illuminant for this color space
   const sourceIlluminant: Illuminant | undefined = colorSpaceMap.get(
     sourceColorSpace
   )?.illuminant;
 
+  // grab a reference to any axis order mappings associated with the target color model
+  const alignmentOrder: number[] | undefined = colorModelMap.get(
+    targetColorModel
+  )?.axisOrder;
+
+  // base set of transformation arguments used across most methods
   const commonTransformationArgs: any[] = [
     vertex,
     sourceColorSpace,
     referenceIlluminant,
   ];
 
-  const transformationArgs: any =
+  // determine additional transformation method args based on the target color model
+  const transformationArgs: any = [
+    ...commonTransformationArgs,
     targetColorModel === ColorModel.RGB && sourceIlluminant
-      ? [
-          ...commonTransformationArgs,
-          {
-            compand: false,
-            useAdaptiveMatrix: deriveChromaticAdaptationMatrixFor(
-              sourceIlluminant,
-              Illuminant.D50
-            ),
-            useTransformationMatrix: deriveRgbTransformationMatrixFor(
-              sourceColorSpace,
-              referenceIlluminant
-            ),
-          },
-        ]
-      : commonTransformationArgs;
+      ? {
+          compand: false,
+          useAdaptiveMatrix: deriveChromaticAdaptationMatrixFor(
+            sourceIlluminant,
+            Illuminant.D50
+          ),
+          useTransformationMatrix: deriveRgbTransformationMatrixFor(
+            sourceColorSpace,
+            referenceIlluminant
+          ),
+        }
+      : {},
+  ];
 
+  // transform the vertex based on the source and target color models
+  // with applicable method arguments
   const transformedColor: number[] = Transform(sourceColorModel).to(
     targetColorModel
   )(...transformationArgs);
 
+  // normalize the color
+  const normalizedColor: number[] = normalizeAnyColor(
+    transformedColor,
+    targetColorModel
+  );
+
+  // some color spaces need their components re-arranged in order to map to proper X,Y,Z axes in 3d space.
+  // this is determined by color model options which represent an array of component order of arrangement.
+  const alignedColor: number[] = alignmentOrder
+    ? alignmentOrder.map((index: number) => normalizedColor[index])
+    : normalizedColor;
+
+  // if this is a polar coordinate system, further transform the vertex point
   const mappedVertex: number[] =
-    targetColorModel === ColorModel.LCHuv
-      ? getPolarCoordinatesFor(normalizeLchColor(transformedColor))
-      : transformedColor;
+    colorModelMap.get(targetColorModel)?.graphType === GraphType.cylindrical
+      ? getPolarCoordinatesFor(alignedColor)
+      : alignedColor;
 
   return mappedVertex;
 }
@@ -168,15 +186,15 @@ export function getTransformedVertexDataFromGeometry(
       const vertex: number[] = geometry[i][j];
       const pathLength: number = Math.sqrt(geometry[i].length);
 
-      positions.push(
-        getPositionFromVertex(
-          expandRgbColor(vertex),
-          fromColorSpace,
-          fromColorModel,
-          toColorModel,
-          referenceIlluminant
-        )
+      const position: number[] = getPositionFromVertex(
+        expandRgbColor(vertex),
+        fromColorSpace,
+        fromColorModel,
+        toColorModel,
+        referenceIlluminant
       );
+
+      positions.push(position);
 
       colors.push(
         getColorFromVertex(
@@ -212,9 +230,9 @@ export function getPolarCoordinatesFor(colorNormalized: number[]): number[] {
   const lightness: number = colorNormalized[0];
 
   // calculate cartesian coordinates of polar space
-  const x: number = chroma * Math.cos(hue);
+  const x: number = chroma * Math.cos(hue) * 0.75;
   const y: number = lightness;
-  const z: number = chroma * Math.sin(hue);
+  const z: number = chroma * Math.sin(hue) * 0.75;
 
   // return the new constructed point
   return [x, y, z];

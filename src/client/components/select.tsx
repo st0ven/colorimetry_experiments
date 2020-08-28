@@ -5,6 +5,7 @@ import styles from "./select.module.scss";
 interface SelectProps {
   children: React.ReactElement | React.ReactElement[] | React.ReactChildren;
   className?: string;
+  disabled?: boolean;
   id: string;
   initialValue?: string | number;
   label?: string;
@@ -14,6 +15,7 @@ interface SelectProps {
 export function Select({
   children,
   className = "",
+  disabled = false,
   id,
   initialValue,
   label,
@@ -30,6 +32,7 @@ export function Select({
         </label>
       ) : null}
       <select
+        disabled={disabled}
         id={id}
         className={styles.selector}
         onChange={onChange}

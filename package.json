@@ -35,9 +35,9 @@
     "setDBpath": "mongod --dbpath /System/Volumes/Data/data/db",
     "start:db": "brew services restart mongodb-community",
     "start": "react-scripts start",
-    "start:server": "npm run start:db && TS_NODE_PROJECT=\"./config/tsconfig.server.json\" ts-node-dev --respawn ./server/server.ts",
-    "start:app": "craco start",
-    "start:local": "concurrently --kill-others-on-fail \"npm run start:server\" \"npm run start:app\"",
+    "start:server": "TS_NODE_PROJECT=\"./tsconfig.server.json\" ts-node -r tsconfig-paths/register ./server/server.ts --trace-warnings",
+    "start:client": "craco start",
+    "start:local": "concurrently --kill-others-on-fail \"npm run start:server\" \"npm run start:client\"",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "stop:server": "brew services stop mongodb-community"
@@ -63,6 +63,8 @@
     "craco": "0.0.3",
     "csv-loader": "^3.0.3",
     "ts-node-dev": "^1.0.0-pre.57",
+    "tsconfig-paths": "^3.9.0",
+    "tsconfig-paths-webpack-plugin": "^3.3.0",
     "worker-loader": "^3.0.1"
   }
 }

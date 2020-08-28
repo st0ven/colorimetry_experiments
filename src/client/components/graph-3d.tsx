@@ -3,32 +3,22 @@ import cx from "classnames";
 import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import { AxisRenderOptions, renderAxes } from "@rendering/axes";
+import { GraphType } from "@lib/enums";
 
 const canvasBackgroundColor: Babylon.Color4 = new Babylon.Color4(
-  0.23,
-  0.2,
-  0.27,
+  0.06,
+  0.07,
+  0.21,
   1
 );
 
 type RenderMethod = (scene: Babylon.Scene) => void;
 
-export enum GraphType {
-  box = "box",
-  cylindrical = "cylindrical",
-}
-
-export interface GraphAxisOptions {
-  axisOptionsX?: AxisRenderOptions;
-  axisOptionsY?: AxisRenderOptions;
-  axisOptionsZ?: AxisRenderOptions;
-}
-
 // 3D Graph Component Props
 interface Graph3dProps {
   className?: string;
   renderMethods: RenderMethod[];
-  axisOptions?: GraphAxisOptions;
+  axisOptions?: (AxisRenderOptions | undefined)[];
   type: GraphType;
 }
 
@@ -109,7 +99,7 @@ export function Graph3d({
 
       parentNode.dispose();
 
-      renderAxes(type, scene, parentNode, axisOptions);
+      renderAxes(axisOptions, scene, parentNode);
 
       setAxesParentNode(parentNode);
     }

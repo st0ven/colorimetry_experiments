@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect, useReducer } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./color-space.module.scss";
-import { Graph3d, GraphType, GraphAxisOptions } from "@components/graph-3d";
+import { Graph3d } from "@components/graph-3d";
 import { Select } from "@components/select";
 import {
   ColorSpaceOptions,
@@ -10,42 +10,18 @@ import {
 } from "@components/color-space-options";
 import { ColorComponent } from "@components/color-component-input";
 import { fetchColorSpaceGeometry } from "@api/geometry.api";
-import { ColorSpace, Illuminant, ColorModel } from "@lib/color-constants";
+import { ColorSpace, GraphType, Illuminant, ColorModel } from "@lib/enums";
 import { renderHemiLight } from "@rendering/lights";
 import { renderColorSpace } from "@rendering/rgb-color-space";
 import { renderColorIndicator } from "@rendering/color-indicator";
-import { AxisRenderOptions } from "@rendering/axes";
 import { adjustCameraTarget } from "@rendering/camera";
-import { normalRanges } from "@lib/color-constants"
+import { colorModelMap } from "@lib/constants.color";
+import { axisOptionsMap } from "@lib/constants.axes";
 
-const axisOptionsL: AxisRenderOptions = {
-  scalarMin: 0,
-  scalarMax: 100,
-  markers: 4,
-  floatPoint: 0,
-  axisLabel: "L",
-  axisOrigin: new Babylon.Vector3(0, 0, 1),
-};
-
-const axisOptionsC: AxisRenderOptions = {
-  axisLabel: "C",
-  markers: 4,
-  max: 1,
-  floatPoint: 0,
-  scalarMin: 0,
-  scalarMax: normalRanges[ColorModel.LCHuv].C[1],
-};
-
-const axisOptionsH: AxisRenderOptions = {
-  axisLabel: "h",
-  markers: 18,
-  radius: 1,
-};
-
-const cylindricalAxesOptions: GraphAxisOptions = {
-  axisOptionsX: axisOptionsH,
-  axisOptionsY: axisOptionsL,
-  axisOptionsZ: axisOptionsC,
+const fidelity: any = {
+  low: Math.pow(2, 3),
+  med: Math.pow(2, 4),
+  high: Math.pow(2, 5),
 };
 
 export function RGBVisualization() {
@@ -62,13 +38,17 @@ export function RGBVisualization() {
   );
 
   // other controls to store in state
-  const [meshDivisions, setMeshDivisions] = useState<number>(4);
+  const [meshDivisions, setMeshDivisions] = useState<number>(fidelity.low);
   const [useGeometry, setGeometry] = useState<Babylon.VertexData | undefined>();
-  const [graphType, setGraphType] = useState<GraphType>(GraphType.box);
+  const [useGraphType, setGraphType] = useState<GraphType | undefined>(
+    GraphType.box
+  );
 
   // async/loading state
   const [awaitingResponse, setAwaitingResponse] = useState<boolean>(true);
 
+  // update data with API fetch on dependency change
+  // NOTE: this may be moved out of scope of this component entirely in a UI re-configuration
   useEffect(() => {
     (async function getApiResult() {
       const result = await fetchColorSpaceGeometry(
@@ -78,18 +58,11 @@ export function RGBVisualization() {
         toColorModel,
         referenceIlluminant
       );
-
-      setGraphType(
-        toColorModel === ColorModel.LCHuv
-          ? GraphType.cylindrical
-          : GraphType.box
-      );
+      setGraphType(colorModelMap.get(toColorModel)?.graphType);
       setGeometry(result);
       setAwaitingResponse(false);
     })();
   }, [meshDivisions, toColorSpace, toColorModel, referenceIlluminant]);
-
-  //useReducer(()=>{},[]);
 
   // update the state to reflect the selection of which color profile to visualize
   const changeSourceSpace = useCallback(
@@ -182,10 +155,13 @@ export function RGBVisualization() {
 
           // determine camera target vectors based on target color model
           const cameraVectors: number[] =
-            toColorModel === ColorModel.LCHuv ? [0, 0.5, 0] : [0.5, 0.5, 0.5];
+            useGraphType === GraphType.cylindrical
+              ? [0, 0.5, 0]
+              : [0.5, 0.5, 0.5];
 
           // determine zoom lock limit based on euclidean vs polar coordinates
-          const limitLock: number = toColorModel === ColorModel.LCHuv ? 2.25 : 2;
+          const limitLock: number =
+            useGraphType === GraphType.cylindrical ? 2.25 : 2;
 
           // adjust the camera
           adjustCameraTarget(
@@ -199,7 +175,7 @@ export function RGBVisualization() {
         renderColorSpace(useGeometry, scene);
       }
     },
-    [awaitingResponse, useGeometry, toColorModel]
+    [awaitingResponse, useGeometry]
   );
 
   // render the container
@@ -240,19 +216,15 @@ export function RGBVisualization() {
           label="Mesh fidelity"
           initialValue={String(meshDivisions)}
         >
-          <option value="16">low</option>
-          <option value="32">medium</option>
-          <option value="64">high</option>
+          <option value={fidelity.low}>low</option>
+          <option value={fidelity.med}>medium</option>
+          <option value={fidelity.high}>high</option>
         </Select>
       </header>
 
       <Graph3d
-        type={graphType}
-        axisOptions={
-          graphType === GraphType.cylindrical
-            ? cylindricalAxesOptions
-            : undefined
-        }
+        type={useGraphType}
+        axisOptions={axisOptionsMap.get(toColorModel)}
         className={styles.bottomSpacer}
         renderMethods={[renderHemiLight, renderMesh, renderPointMesh]}
       ></Graph3d>

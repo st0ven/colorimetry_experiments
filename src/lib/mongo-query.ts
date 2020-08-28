@@ -1,16 +1,12 @@
 import { VertexData } from "babylonjs";
 import { MongoClient, Db, Collection, MongoClientOptions } from "mongodb";
-import {
-  ColorSpace,
-  Illuminant,
-  ColorModel,
-  colorSpaceMap,
-} from "../lib/color-constants";
+import { ColorSpace, Illuminant, ColorModel } from "@lib/enums";
+import { colorSpaceMap } from "@lib/constants.color";
 import {
   generateColorSpaceGeometry,
   getTransformedVertexDataFromGeometry,
   trimGeometry,
-} from "../lib/vertices";
+} from "@lib/vertices";
 
 const mongoClientOptions: MongoClientOptions = {
   useNewUrlParser: true,
@@ -131,6 +127,7 @@ export async function getVertexDataFor(
     // return stringified result from MongoDB
     return JSON.stringify(document.vertexData);
   } else {
+    console.log('no records found, creating new record');
     // grab the collection holding vertices data
     collection = db.collection("vertices");
 

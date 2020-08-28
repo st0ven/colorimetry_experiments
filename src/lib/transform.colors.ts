@@ -1,15 +1,14 @@
-import { invertMatrix, matrixMultiply, rotateMatrix } from "./math-conversion";
+import { CompandMethod, ColorSpace, ColorModel, Illuminant } from "@lib/enums";
+import { invertMatrix, matrixMultiply, rotateMatrix } from "./transform.matrices";
 import {
-  ColorSpace,
-  Illuminant,
-  ColorModel,
   illuminantMap,
   colorSpaceMap,
+  colorModelMap,
   adaptations,
-  normalRanges,
-} from "./color-constants";
-import { compandDict, CompandMethod, transferParams } from "./gamma-conversion";
-import { flatten } from "./math-conversion";
+  ColorModelMapItemNornalOptions,
+} from "./constants.color";
+import { compandDict, transferParams } from "./transform.gamma";
+import { flatten } from "./transform.matrices";
 
 const transformMap: any = {
   [ColorModel.LCHuv]: {
@@ -17,16 +16,19 @@ const transformMap: any = {
     [ColorModel.RGB]: transform_LCHuv_to_RGB,
   },
   [ColorModel.LUV]: {
-    [ColorModel.LCHuv]: transform_LUV_to_LCHuv,
+    [ColorModel.LCHuv]: transform_to_LCH,
     [ColorModel.XYZ]: transform_LUV_to_XYZ,
   },
   [ColorModel.RGB]: {
+    [ColorModel.LAB]: transform_RGB_to_LAB,
     [ColorModel.LUV]: transform_RGB_to_LUV,
+    [ColorModel.LCHab]: transform_RGB_to_LCHab,
     [ColorModel.LCHuv]: transform_RGB_to_LCHuv,
     [ColorModel.XYZ]: transform_RGB_to_XYZ,
     [ColorModel.xyY]: transform_RGB_to_xyY,
   },
   [ColorModel.XYZ]: {
+    [ColorModel.LAB]: transform_XYZ_to_LAB,
     [ColorModel.LUV]: transform_XYZ_to_LUV,
     [ColorModel.RGB]: transform_XYZ_to_RGB,
     [ColorModel.xyY]: transform_XYZ_to_xyY,
@@ -194,53 +196,42 @@ export function findContrastRatio(c1_XYZ: number[], c2_XYZ: number[]): number {
   return (y1 + 0.05) / (y2 + 0.05);
 }
 
-// takes a coordinate in RGB refernce space and projects onto a
-// 3d plane for easier visualization of the chromaticity plot
-export function normalizeColor([X, Y, Z]: number[]): number[] {
-  const sum: number = X + Y + Z;
-  return [X / sum, Y / sum, Z / sum];
-}
-
-// takes a color touple of some bit depth and returns a normalized range for each component
-export function normalizeRgbColor(
-  [x, y, z]: number[],
-  bitDepth: number = 8
+export function normalizeAnyColor(
+  color: number[],
+  colorModel: ColorModel
 ): number[] {
-  const denominator: number = Math.pow(2, bitDepth) - 1;
-  return [x / denominator, y / denominator, z / denominator];
-}
+  // reference any color model specific normalization options from the global map
+  const options: ColorModelMapItemNornalOptions | undefined = colorModelMap.get(
+    colorModel
+  )?.normalizeOptions;
 
-// normalize Luv components within a range of 0-1
-export function normalizeLuvColor([L, u, v]: number[]): number[] {
-  return [
-    Math.abs(
-      L /
-        (normalRanges[ColorModel.LUV].L[1] - normalRanges[ColorModel.LUV].L[0])
-    ),
-    Math.abs(
-      u /
-        (normalRanges[ColorModel.LUV].U[1] - normalRanges[ColorModel.LUV].U[0])
-    ),
-    Math.abs(
-      v /
-        (normalRanges[ColorModel.LUV].V[1] - normalRanges[ColorModel.LUV].V[0])
-    ),
-  ];
-}
+  // attempt to extract ranges of this colorModel from the global map
+  const ranges: number[][] | undefined = colorModelMap.get(
+    options?.useColorModel || colorModel
+  )?.range;
 
-// normalize LCh components within a range of 0-1
-export function normalizeLchColor([L, C, h]: number[]): number[] {
-  return [
-    L /
-      (normalRanges[ColorModel.LCHuv].L[1] -
-        normalRanges[ColorModel.LCHuv].L[0]),
-    C /
-      (normalRanges[ColorModel.LCHuv].C[1] -
-        normalRanges[ColorModel.LCHuv].C[0]),
-    h /
-      (normalRanges[ColorModel.LCHuv].H[1] -
-        normalRanges[ColorModel.LCHuv].H[0]),
-  ];
+  // test boundary on whether range exists, otherwise throw error
+  if (ranges) {
+    // map through each component within the supplied color to normalize
+    return color.map((component: number, index: number) => {
+      // ensure that the colorModel contains a definition for component ranges
+      if (ranges[index]) {
+        // calculate the normal value relative to the component expected range
+        const [minC, maxC]: number[] = ranges[index];
+        const offset: number = Math.abs(minC / (maxC - minC));
+        const Cn: number = component / (maxC - minC) + offset;
+        return options?.useAbsoluteValues ? Math.abs(Cn) : Cn;
+      } else {
+        throw new Error(
+          `Unable to normalize color: ${color} – Unable to fetch range for component at index ${index}`
+        );
+      }
+    });
+  } else {
+    throw new Error(
+      `Unable to normalize color: ${color} – Unable to fetch component ranges`
+    );
+  }
 }
 
 // Conversion helper functions that allow for determining tarnsform matrix
@@ -274,11 +265,11 @@ export function transform_LCHuv_to_RGB(
   });
 }
 
-export function transform_LUV_to_LCHuv([L, U, V]: number[]): number[] {
-  const arcTan2: number = Math.atan2(V, U);
+export function transform_to_LCH([L, X, Z]: number[]): number[] {
+  const arcTan2: number = Math.atan2(Z, X);
   const rad2deg: number = 180 / Math.PI;
 
-  const C: number = Math.sqrt(Math.pow(U, 2) + Math.pow(V, 2));
+  const C: number = Math.sqrt(Math.pow(X, 2) + Math.pow(Z, 2));
   const h: number = arcTan2 >= 0 ? arcTan2 * rad2deg : arcTan2 * rad2deg + 360;
 
   return [L, C, h];
@@ -317,13 +308,42 @@ export function transform_LUV_to_XYZ(
   }
 }
 
+export function transform_RGB_to_LAB(
+  colorRgb: number[],
+  fromColorSpace: ColorSpace,
+  referenceIlluminant: Illuminant = Illuminant.D50,
+  compand: boolean = false
+) {
+  const [L, a, b]: number[] = transform_XYZ_to_LAB(
+    transform_RGB_to_XYZ(colorRgb, fromColorSpace, referenceIlluminant, {
+      compand,
+    }),
+    referenceIlluminant
+  );
+
+  // Lab needs to map to XYZ, in which case the Y axis is represented by L
+  // hence the order is being manipulated to align values to the correct axis
+  return [L, a, b];
+}
+
+export function transform_RGB_to_LCHab(
+  colorRgb: number[],
+  fromColorSpace: ColorSpace,
+  referenceIlluminant: Illuminant = Illuminant.D50,
+  compand: boolean = false
+): number[] {
+  return transform_to_LCH(
+    transform_RGB_to_LAB(colorRgb, fromColorSpace, referenceIlluminant, compand)
+  );
+}
+
 export function transform_RGB_to_LCHuv(
   colorRgb: number[],
   fromColorSpace: ColorSpace,
   referenceIlluminant: Illuminant = Illuminant.D50,
   compand: boolean = false
 ): number[] {
-  return transform_LUV_to_LCHuv(
+  return transform_to_LCH(
     transform_RGB_to_LUV(colorRgb, fromColorSpace, referenceIlluminant, compand)
   );
 }
@@ -334,12 +354,14 @@ export function transform_RGB_to_LUV(
   referenceIlluminant: Illuminant = Illuminant.D50,
   compand: boolean = false
 ) {
-  return transform_XYZ_to_LUV(
+  const [L, u, v]: number[] = transform_XYZ_to_LUV(
     transform_RGB_to_XYZ(colorRgb, fromColorSpace, referenceIlluminant, {
       compand,
     }),
     referenceIlluminant
   );
+
+  return [L, u, v];
 }
 
 export interface RgbTransformationOptions {
@@ -371,7 +393,10 @@ export function transform_RGB_to_XYZ(
   // a valid source illuminant is a function dependency
   if (sourceIlluminant) {
     // normalize rgb values
-    const normalized_color: number[] = normalizeRgbColor(colorRgb);
+    const normalized_color: number[] = normalizeAnyColor(
+      colorRgb,
+      ColorModel.RGB
+    );
 
     // get reference for which method the destination color space uses for companding
     const compandMethod: CompandMethod = transferParams[colorSpace].method;
@@ -431,8 +456,47 @@ export function transform_xyY_to_XYZ([x, y, Y]: number[]): number[] {
   return [(x * Y) / y, Y, ((1 - x - y) * Y) / y];
 }
 
+function get_LAB_component_derivative(component: number): number {
+  const sigma: number = 6 / 29;
+  const threshold: number = Math.pow(sigma, 3);
+
+  return component > threshold
+    ? Math.pow(component, 1 / 3)
+    : component / (3 * Math.pow(sigma, 2)) + 4 / 29;
+}
+
+// Transform XYZ color into LAB color
+export function transform_XYZ_to_LAB(
+  [X, Y, Z]: number[],
+  referenceIlluminant: Illuminant
+): number[] {
+  const whitepoint: number[] | undefined = illuminantMap.get(
+    referenceIlluminant
+  );
+
+  if (whitepoint) {
+    const [Xr, Yr, Zr] = whitepoint;
+
+    const L: number = 116 * get_LAB_component_derivative(Y / Yr) - 16;
+    const a: number =
+      500 *
+      (get_LAB_component_derivative(X / Xr) -
+        get_LAB_component_derivative(Y / Yr));
+    const b: number =
+      200 *
+      (get_LAB_component_derivative(Y / Yr) -
+        get_LAB_component_derivative(Z / Zr));
+
+    return [L, a, b];
+  } else {
+    throw new Error(
+      `Error transforming XYZ to LAB: Could not determine a whitepoint from referenceIlluminant: ${referenceIlluminant}`
+    );
+  }
+}
+
 export function transform_XYZ_to_LUV(
-  XYZ_color: number[],
+  xyzColor: number[],
   referenceIlluminant: Illuminant = Illuminant.D50
 ): number[] {
   const whitepoint: number[] | undefined = illuminantMap.get(
@@ -450,7 +514,7 @@ export function transform_XYZ_to_LUV(
 
     // destructure reference white and source color primaries
     const [Xr, Yr, Zr]: number[] = whitepoint;
-    const [X, Y, Z]: number[] = XYZ_color;
+    const [X, Y, Z]: number[] = xyzColor;
 
     // derive prime values required for Luv calculation
     const yr = Y / Yr;
@@ -473,7 +537,7 @@ export function transform_XYZ_to_LUV(
 
 // Inverse transformation of transform_RGB_to_XYZ with the same options available
 export function transform_XYZ_to_RGB(
-  XYZ_color: number[],
+  xyzColor: number[],
   colorSpace: ColorSpace,
   referenceIlluminant: Illuminant = Illuminant.D50,
   compand?: boolean
@@ -499,7 +563,7 @@ export function transform_XYZ_to_RGB(
     );
 
     const adapted_color: number[] = applyChromaticAdaptation(
-      XYZ_color,
+      xyzColor,
       sourceIlluminant,
       referenceIlluminant
     );

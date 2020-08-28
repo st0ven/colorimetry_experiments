@@ -1,11 +1,12 @@
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import * as dotenv from "dotenv";
-import { ColorSpace, Illuminant, ColorModel } from "../src/lib/color-constants";
+import { ColorSpace, Illuminant, ColorModel } from "@lib/enums";
 import {
   storeGeneratedMeshData,
   getVertexDataFor,
   VertexDataFields,
+  clearAllRecordsFromCollection
 } from "../src/lib/mongo-query";
 
 if (!process.env.MONGODB_NAME) {
@@ -24,7 +25,7 @@ const dbName: string = process.env.MONGODB_NAME as string;
 // initially cache some source geometry data if none exists
 // situation should arise on initial spin up of server
 storeGeneratedMeshData(dbUrl, dbName);
-//clearVertexDataDb(dbUrl, dbName);
+clearAllRecordsFromCollection(dbUrl, dbName, "vertexData");
 
 app.use(bodyParser.json());
 

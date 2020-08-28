@@ -1,10 +1,6 @@
 import React from "react";
-import {
-  ColorSpace,
-  ColorModel,
-  Illuminant,
-  colorSpaceMap,
-} from "@lib/color-constants";
+import { colorSpaceMap } from "@lib/constants.color";
+import { ColorModel, ColorSpace, Illuminant } from "@lib/enums";
 
 // populate a list of color space options within an <Option> tag as mapped
 // against the keys of the ColorSpace enum
@@ -23,7 +19,10 @@ export function ColorSpaceOptions() {
 export function ColorModelOptions() {
   return (
     <React.Fragment>
+      <option value={ColorModel.LAB}>{ColorModel.LAB}</option>
+      <option value={ColorModel.LCHab}>{ColorModel.LCHab}</option>
       <option value={ColorModel.LCHuv}>{ColorModel.LCHuv}</option>
+      <option value={ColorModel.LUV}>{ColorModel.LUV}</option>
       <option value={ColorModel.XYZ}>{ColorModel.XYZ}</option>
     </React.Fragment>
   );

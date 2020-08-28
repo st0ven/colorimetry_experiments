@@ -1,18 +1,8 @@
 import * as Babylon from "babylonjs";
 import { renderLabel } from "@rendering/billboards";
 import { FloatArray } from "babylonjs";
-import { GraphType } from "@components/graph-3d";
-
-// render base axial guidelines
-const axisMarkerVectorX: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorY: Babylon.Vector3 = new Babylon.Vector3(0, 0, 1);
-const axisMarkerVectorZ: Babylon.Vector3 = new Babylon.Vector3(1, 0, 0);
-
-export enum Axis {
-  X = "X",
-  Y = "Y",
-  Z = "Z",
-}
+import { convertDegreesToRadians } from "@lib/transform.matrices";
+import { Axis, AxisType } from "@lib/enums";
 
 export interface AxisRenderOptions {
   axisLabel?: string | undefined;
@@ -26,14 +16,10 @@ export interface AxisRenderOptions {
   radius?: number;
   scalarMax?: number;
   scalarMin?: number;
+  type?: AxisType;
   opacity?: number;
 }
 
-export interface AxesOptions {
-  axisOptionsX?: AxisRenderOptions;
-  axisOptionsY?: AxisRenderOptions;
-  axisOptionsZ?: AxisRenderOptions;
-}
 // function which will render axis normals, markers and labels related
 // to that axis. Requires an axis, options and a scene object as arguments.
 export function renderAxis(
@@ -64,10 +50,17 @@ export function renderAxis(
   // markers will be inserted along every point in the path.
   const axisVectors: Array<Babylon.Vector3> = [];
 
+  const referenceOrigin: number =
+    axis === Axis.X
+      ? axisOrigin.x
+      : axis === Axis.Y
+      ? axisOrigin.y
+      : axisOrigin.z;
+
   // create segments to construct the line and use as reference for creating
   // additional markers for measurement reference
   for (let i = 0; i < markers + 1; i++) {
-    const iterationOffset: number = axisOrigin.x + nodeDelta * i;
+    const iterationOffset: number = referenceOrigin + nodeDelta * i;
     const vX: number = axis === Axis.X ? iterationOffset : axisOrigin.x;
     const vY: number = axis === Axis.Y ? iterationOffset : axisOrigin.y;
     const vZ: number = axis === Axis.Z ? iterationOffset : axisOrigin.z;
@@ -133,7 +126,7 @@ export function renderAxis(
 
       // render marker label to scenee
       renderLabel(
-        Number(nodeLabelDelta * index).toFixed(floatPoint),
+        Number(nodeLabelDelta * index + scalarMin).toFixed(floatPoint),
         normalPoint.add(markerVector.scale(markerSize * 2)),
         {
           fontSize: 180,
@@ -191,23 +184,29 @@ export function renderCylinderAxis(
 
   // marker constants
   const markerAngleDelta: number = (linePoints.length - 2 || 360) / markers;
-  const markerVector: Babylon.Vector3 = new Babylon.Vector3(0, 0.03, 0);
 
   // loop through points and render markers & labels
   for (let i = 0; i < markers; i++) {
     const markerDegree: number = i * markerAngleDelta;
     const degreeVector: Babylon.Vector3 = linePoints[markerDegree];
+    const markerVector: Babylon.Vector3 = new Babylon.Vector3(
+      Math.cos(convertDegreesToRadians(markerDegree)) * 0.03,
+      0,
+      Math.sin(convertDegreesToRadians(markerDegree)) * 0.03
+    );
     const marker: Babylon.LinesMesh = Babylon.MeshBuilder.CreateLines(
       `cylinder-marker-${i}`,
-      { points: [degreeVector, degreeVector.add(markerVector)] },
+      {
+        points: [degreeVector, degreeVector.add(markerVector)],
+      },
       scene
     );
     marker.alpha = opacity;
     marker.parent = circle;
 
     renderLabel(
-      String(markerDegree),
-      degreeVector.add(markerVector).add(markerVector),
+      String(`${markerDegree}\u00B0`),
+      degreeVector.add(markerVector).add(markerVector).add(markerVector),
       {
         fontSize: 180,
         labelWidth: 0.08,
@@ -222,32 +221,15 @@ export function renderCylinderAxis(
 }
 
 export function renderAxes(
-  type: GraphType,
+  options: (AxisRenderOptions | undefined)[] = [],
   scene: Babylon.Scene,
-  parentNode: Babylon.Nullable<Babylon.Node>,
-  options: AxesOptions = {}
+  parentNode: Babylon.Nullable<Babylon.Node>
 ) {
-  const { axisOptionsX = {}, axisOptionsY = {}, axisOptionsZ = {} } = options;
+  options.forEach((optionSet: AxisRenderOptions = {}, i: number) => {
+    const axis: Axis = [Axis.X, Axis.Y, Axis.Z][i];
+    const renderMethod: any =
+      optionSet.type === AxisType.polar ? renderCylinderAxis : renderAxis;
 
-  // mix in axis specific options to the shared option parameters
-  const combinedAxisOptionsX: AxisRenderOptions = {
-    ...axisOptionsX,
-    markerVector: axisMarkerVectorX,
-  };
-
-  const combinedAxisOptionsY: AxisRenderOptions = {
-    ...axisOptionsY,
-    markerVector: axisMarkerVectorY,
-  };
-
-  const combinedAxisOptionsZ: AxisRenderOptions = {
-    ...axisOptionsZ,
-    markerVector: axisMarkerVectorZ,
-  };
-
-  type === GraphType.box
-    ? renderAxis(Axis.X, combinedAxisOptionsX, scene, parentNode)
-    : renderCylinderAxis(Axis.X, combinedAxisOptionsX, scene, parentNode);
-  renderAxis(Axis.Y, combinedAxisOptionsY, scene, parentNode);
-  renderAxis(Axis.Z, combinedAxisOptionsZ, scene, parentNode);
+    renderMethod(axis, optionSet, scene, parentNode);
+  });
 }

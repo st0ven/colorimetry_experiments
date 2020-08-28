@@ -1,5 +1,5 @@
 import { VertexData } from "babylonjs";
-import { Illuminant, ColorModel, ColorSpace } from "@lib/color-constants";
+import { Illuminant, ColorModel, ColorSpace } from "@lib/enums";
 
 const dataEndpoint: string = `/data/color-space`;
 

@@ -1,11 +1,4 @@
-import { ColorSpace } from "./color-constants";
-
-// enumeration of different companding algorithms to be used
-export enum CompandMethod {
-  gamma = "gamma",
-  sRGB = "sRGB",
-  lStar = "lStar",
-}
+import { ColorSpace, CompandMethod } from "@lib/enums"
 
 // definition of parameters used for a given color space to convert
 // linear <--> nonlinear representation

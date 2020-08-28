@@ -1,7 +1,7 @@
 {
   "extends": "./config/tsconfig.paths.json",
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2019",
     "lib": [
       "dom",
       "dom.iterable",
@@ -26,9 +26,7 @@
     "module": "esnext"
   },
   "include": [
-    "src"
-  ],
-  "exclude": [
-    "./src/server/**/*"
+    "src",
+    "server"
   ]
 }
