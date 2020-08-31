@@ -34,13 +34,12 @@
     "build": "react-scripts build",
     "setDBpath": "mongod --dbpath /System/Volumes/Data/data/db",
     "start:db": "brew services restart mongodb-community",
-    "start": "react-scripts start",
     "start:server": "TS_NODE_PROJECT=\"./tsconfig.server.json\" ts-node -r tsconfig-paths/register ./server/server.ts --trace-warnings",
     "start:client": "craco start",
     "start:local": "concurrently --kill-others-on-fail \"npm run start:server\" \"npm run start:client\"",
+    "stop:db": "brew services stop mongodb-community",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "stop:server": "brew services stop mongodb-community"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": "react-app"

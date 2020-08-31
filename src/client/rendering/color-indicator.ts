@@ -1,13 +1,9 @@
 import * as Babylon from "babylonjs";
-import { colorModelMap } from "@lib/constants.color";
 import { ColorModel, ColorSpace, Illuminant } from "@lib/enums";
-import { getPolarCoordinatesFor } from "@lib/vertices";
 import { sceneEntityNames } from "@res/rendering-constants";
-import { GraphType } from "@lib/enums";
+import { getPositionFromVertex, getColorFromVertex } from "@lib/vertices";
 import {
   expandRgbColor,
-  normalizeAnyColor,
-  Transform,
 } from "@lib/transform.colors";
 
 // Renders an indicator within 3d space which utilizes a sphere. This sphere
@@ -20,28 +16,21 @@ export function renderColorIndicator(
   referenceIlluminant: Illuminant,
   scene: Babylon.Scene
 ) {
-  const transformParams = [
+  // use library method to determine position in 3d space given the relevant rendering parameters
+  // for a given position expressed in normalized terms, expanded to RGB.
+  const pointPosition: number[] = getPositionFromVertex(
     expandRgbColor(rgb_color),
     colorSpace,
-    referenceIlluminant,
-  ];
-  // derive location in XYZ space of point center
-  let pointPosition: number[] = Transform(ColorModel.RGB).to(colorModel)(
-    ...transformParams
-  );
+    ColorModel.RGB,
+    colorModel,
+    referenceIlluminant
+  ); 
 
-  // transform to polar coordinates if necessary
-  // grabs property definitions from the colorModelMap which defines the grapht ype
-  // of which that model should be represented in 3d space.
-  pointPosition =
-    colorModelMap.get(colorModel)?.graphType === GraphType.cylindrical
-      ? getPolarCoordinatesFor(normalizeAnyColor(pointPosition, colorModel))
-      : pointPosition;
-
-  // derive normalized RGB color for the point within the current space
-  // add companding flag to ensure proper gamma correction is applied
-  const pointColor: number[] = Transform(ColorModel.RGB).to(ColorModel.XYZ)(
-    ...transformParams
+  // derive the color which maps to the current renfering parameters to be applied to the indicator
+  const pointColor: number[] = getColorFromVertex(
+    expandRgbColor(rgb_color),
+    colorSpace,
+    referenceIlluminant
   );
 
   // Create a transform node, or reference one from a provided entity list.

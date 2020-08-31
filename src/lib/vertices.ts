@@ -70,7 +70,7 @@ export function generateColorSpaceGeometry(
 
 // given a position in XYZ space, calculate the appropriate RGB value to
 // assign to that vertex.
-function getColorFromVertex(
+export function getColorFromVertex(
   vertex: number[],
   sourceColorSpace: ColorSpace = ColorSpace.sRGB,
   referenceIlluminant: Illuminant = Illuminant.D65
@@ -99,7 +99,7 @@ function getFacetsFromVertex(i: number, offset: number): number[] {
 // given a position in XYZ space, map where to render that position based on
 // the desired reference color model. This can either be calculated as polar or
 // euclidean coordinates based on the desired color model to visualize the color space.
-function getPositionFromVertex(
+export function getPositionFromVertex(
   vertex: number[],
   sourceColorSpace: ColorSpace,
   sourceColorModel: ColorModel,

@@ -1,109 +1,47 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useContext } from "react";
 import * as Babylon from "babylonjs";
 import styles from "./color-space.module.scss";
 import { Graph3d } from "@components/graph-3d";
-import { Select } from "@components/select";
-import {
-  ColorSpaceOptions,
-  ColorModelOptions,
-  IlluminantOptions,
-} from "@components/color-space-options";
+import { GraphType } from "@lib/enums";
 import { ColorComponent } from "@components/color-component-input";
-import { fetchColorSpaceGeometry } from "@api/geometry.api";
-import { ColorSpace, GraphType, Illuminant, ColorModel } from "@lib/enums";
 import { renderHemiLight } from "@rendering/lights";
 import { renderColorSpace } from "@rendering/rgb-color-space";
 import { renderColorIndicator } from "@rendering/color-indicator";
 import { adjustCameraTarget } from "@rendering/camera";
 import { colorModelMap } from "@lib/constants.color";
 import { axisOptionsMap } from "@lib/constants.axes";
+import { StoreContext } from "@hooks/store-context";
+import { AxisRenderOptions } from "@client/rendering/axes";
 
-const fidelity: any = {
-  low: Math.pow(2, 3),
-  med: Math.pow(2, 4),
-  high: Math.pow(2, 5),
-};
+interface RgbVisualizationProps {
+  geometry: Babylon.VertexData | undefined;
+}
 
-export function RGBVisualization() {
+export function RGBVisualization({ geometry }: RgbVisualizationProps) {
   // hold state for RGB color inputs
   const [redComponent, setRedComponent] = useState<number>(1);
   const [greenComponent, setGreenComponent] = useState<number>(1);
   const [blueComponent, setBlueComponent] = useState<number>(1);
 
-  // hold state for source & reference color space / illuminant options
-  const [toColorSpace, setColorSpace] = useState<ColorSpace>(ColorSpace.sRGB);
-  const [toColorModel, setColorModel] = useState<ColorModel>(ColorModel.XYZ);
-  const [referenceIlluminant, setReferenceIlluminant] = useState<Illuminant>(
-    Illuminant.D65
-  );
+  const { store } = useContext(StoreContext);
 
-  // other controls to store in state
-  const [meshDivisions, setMeshDivisions] = useState<number>(fidelity.low);
-  const [useGeometry, setGeometry] = useState<Babylon.VertexData | undefined>();
-  const [useGraphType, setGraphType] = useState<GraphType | undefined>(
-    GraphType.box
-  );
+  const { colorSpace, targetColorModel, whitepoint, waiting } = store;
 
-  // async/loading state
-  const [awaitingResponse, setAwaitingResponse] = useState<boolean>(true);
+  const [useGraphType, setGraphType] = useState<GraphType>(GraphType.box);
+  const [useAxisOptions, setAxisOptions] = useState<
+    Array<AxisRenderOptions | undefined>
+  >(axisOptionsMap.get(targetColorModel) || []);
 
   // update data with API fetch on dependency change
   // NOTE: this may be moved out of scope of this component entirely in a UI re-configuration
   useEffect(() => {
-    (async function getApiResult() {
-      const result = await fetchColorSpaceGeometry(
-        meshDivisions,
-        toColorSpace,
-        ColorModel.RGB,
-        toColorModel,
-        referenceIlluminant
-      );
-      setGraphType(colorModelMap.get(toColorModel)?.graphType);
-      setGeometry(result);
-      setAwaitingResponse(false);
-    })();
-  }, [meshDivisions, toColorSpace, toColorModel, referenceIlluminant]);
-
-  // update the state to reflect the selection of which color profile to visualize
-  const changeSourceSpace = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const { value } = event.target;
-      setColorSpace(Object(ColorSpace)[value]);
-      setAwaitingResponse(true);
-    },
-    []
-  );
-
-  // update the reference illuminant to be used to calculate color transforms
-  // to the reference space
-  const changeReferenceIlluminant = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const { value } = event.target;
-      setReferenceIlluminant(Object(Illuminant)[value]);
-      setAwaitingResponse(true);
-    },
-    []
-  );
-
-  // update the reference space to the user selected space
-  const changeColorModel = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const { value } = event.target;
-      setColorModel(Object(ColorModel)[value]);
-      setAwaitingResponse(true);
-    },
-    []
-  );
-
-  // change the fidelity for which to render the meshes
-  const changeFidelity = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const { value } = event.target;
-      setMeshDivisions(Number(value));
-      setAwaitingResponse(true);
-    },
-    []
-  );
+    const graphType: GraphType | undefined = colorModelMap.get(targetColorModel)
+      ?.graphType;
+    if (!waiting && graphType && geometry) {
+      setGraphType(graphType);
+      setAxisOptions(axisOptionsMap.get(targetColorModel) || []);
+    }
+  }, [geometry, waiting]);
 
   // update of component callbacks for red
   const handleRedComponentChange = useCallback((value: number) => {
@@ -121,31 +59,21 @@ export function RGBVisualization() {
   // render a single point as a sphere within the visualization
   const renderPointMesh = useCallback(
     (scene: Babylon.Scene) => {
-      if (!awaitingResponse) {
-        renderColorIndicator(
-          [redComponent, greenComponent, blueComponent],
-          toColorSpace,
-          toColorModel,
-          referenceIlluminant,
-          scene
-        );
-      }
+      renderColorIndicator(
+        [redComponent, greenComponent, blueComponent],
+        colorSpace,
+        targetColorModel,
+        whitepoint,
+        scene
+      );
     },
-    [
-      awaitingResponse,
-      redComponent,
-      greenComponent,
-      blueComponent,
-      toColorSpace,
-      toColorModel,
-      referenceIlluminant,
-    ]
+    [redComponent, greenComponent, blueComponent, geometry]
   );
 
   // render the color space mesh given a selected color space
   const renderMesh = useCallback(
     (scene: Babylon.Scene) => {
-      if (useGeometry && !awaitingResponse) {
+      if (geometry && !waiting) {
         //adjust camera
         {
           // get reference to the in-scene camera
@@ -172,63 +100,21 @@ export function RGBVisualization() {
         }
 
         // render the mesh representing color space volume
-        renderColorSpace(useGeometry, scene);
+        renderColorSpace(geometry, scene);
       }
     },
-    [awaitingResponse, useGeometry]
+    [geometry, useGraphType, waiting]
   );
 
   // render the container
   return (
     <React.Fragment>
-      <header className={styles.header}>
-        <Select
-          className={styles.colorSpaceSelector}
-          onChange={changeSourceSpace}
-          id="space options"
-          label="Color space"
-          initialValue={toColorSpace}
-        >
-          <ColorSpaceOptions />
-        </Select>
-        <Select
-          className={styles.colorSpaceSelector}
-          onChange={changeReferenceIlluminant}
-          id="illuminant options"
-          label="Reference illuminant"
-          initialValue={referenceIlluminant}
-        >
-          <IlluminantOptions />
-        </Select>
-        <Select
-          className={styles.colorSpaceSelector}
-          onChange={changeColorModel}
-          id="destination space"
-          label="Reference model"
-          initialValue={toColorModel}
-        >
-          <ColorModelOptions />
-        </Select>
-        <Select
-          className={styles.colorSpaceSelector}
-          onChange={changeFidelity}
-          id="mesh fidelity"
-          label="Mesh fidelity"
-          initialValue={String(meshDivisions)}
-        >
-          <option value={fidelity.low}>low</option>
-          <option value={fidelity.med}>medium</option>
-          <option value={fidelity.high}>high</option>
-        </Select>
-      </header>
-
       <Graph3d
-        type={useGraphType}
-        axisOptions={axisOptionsMap.get(toColorModel)}
-        className={styles.bottomSpacer}
+        axisOptions={useAxisOptions}
+        className={styles.graph}
         renderMethods={[renderHemiLight, renderMesh, renderPointMesh]}
       ></Graph3d>
-
+      {/*
       <ColorComponent
         className={styles.colorComponent}
         initialValue={Math.round(redComponent * 255)}
@@ -244,6 +130,7 @@ export function RGBVisualization() {
         initialValue={Math.round(blueComponent * 255)}
         onChange={handleBlueComponentChange}
       ></ColorComponent>
+      */}
     </React.Fragment>
   );
 }

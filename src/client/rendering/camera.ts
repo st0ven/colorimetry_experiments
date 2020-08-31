@@ -7,6 +7,6 @@ export function adjustCameraTarget(
 ) {
   // update camera to focus on XYZ origin
   camera.setTarget(targetVector);
-  camera.lowerRadiusLimit = limitLock;
-  camera.upperRadiusLimit = limitLock;
+  //camera.lowerRadiusLimit = limitLock;
+  //camera.upperRadiusLimit = limitLock;
 }

@@ -59,8 +59,7 @@ export function ChromaticityVisualization() {
       </header>
 
       <Graph3d
-        type={GraphType.box}
-        axisOptions={axisOptionsMap.get(ColorModel.XYZ)}
+        axisOptions={axisOptionsMap.get(ColorModel.XYZ) || []}
         renderMethods={[
           renderHemiLight,
           render_spectral_locus,

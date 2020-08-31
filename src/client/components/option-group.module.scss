@@ -1,0 +1,103 @@
+$gray-color: rgb(98, 94, 95);
+$color-selected: rgb(84, 24, 214);
+
+.group {
+  fieldset {
+    padding: 0;
+    margin: 0;
+    border: none;
+    padding: 0.5rem 0 0.5rem 0.5rem;
+  }
+
+  .label {
+    margin-bottom: 0.25rem;
+    opacity: 1;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  label,
+  select {
+    display: block;
+  }
+
+  select {
+    height: 2rem;
+    padding: 0 0.5rem;
+    box-sizing: border-box;
+    font-size: 0.875rem;
+    opacity: 0.6;
+  }
+
+  .info {
+    font-size: 0.75rem;
+    font-weight: 300;
+    color: $gray-color;
+    margin-top: 0.25rem;
+  }
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  position: relative;
+	margin-bottom: 0.5rem;
+	cursor: pointer;
+
+  &:last-of-type {
+    margin-bottom: 0;
+  }
+
+  input {
+    margin: 0;
+    padding: 0;
+    height: 0;
+    visibility: hidden;
+    position: absolute;
+    z-index: -1;
+  }
+
+  button {
+    position: relative;
+    width: 1.125rem;
+    height: 1.125rem;
+    background: white;
+    border: 2px solid $gray-color;
+    border-radius: 100%;
+		box-sizing: border-box;
+  }
+
+  label {
+    padding: 0;
+    padding-left: 0.5rem;
+    margin: 0;
+    line-height: 1.5;
+    text-transform: capitalize;
+    //color: $gray-color;
+    font-weight: 400;
+    font-size: 0.875rem;
+	}
+	
+	button, label{
+		cursor: inherit;
+	}
+
+  &.disabled {
+		opacity: 0.4;
+    button {
+      background: gray;
+    }
+  }
+
+  &.checked {
+    button {
+			background: $color-selected;
+			border: none;
+		}
+		label{
+			color: $color-selected;
+		}
+  }
+}
