@@ -1,11 +1,18 @@
 $gray-color: rgb(98,94,95);
 
-.select {
+section.inputGroup {
   display: flex;
   flex-direction: column;
 
-  label {
-    margin-bottom: 0.33rem;
+  fieldset {
+    padding: 0;
+    margin: 0;
+    border: none;
+    padding: 0.5rem 0 0.5rem 0.5rem;
+  }
+
+  label, legend {
+    margin-bottom: 0.25rem;
     opacity: 1;
     font-size: 0.875rem;
 		font-weight: 600;
@@ -24,7 +31,7 @@ $gray-color: rgb(98,94,95);
     opacity: 0.6;
   }
 
-  .info {
+  small {
 		font-size: 0.75rem;
 		font-weight: 300;
 		color: $gray-color;

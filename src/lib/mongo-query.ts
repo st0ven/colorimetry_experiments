@@ -1,6 +1,6 @@
 import { VertexData } from "babylonjs";
 import { MongoClient, Db, Collection, MongoClientOptions } from "mongodb";
-import { ColorSpace, Illuminant, ColorModel } from "@lib/enums";
+import { ColorSpace, Illuminant, ColorModel, FidelityLevels } from "@lib/enums";
 import { colorSpaceMap } from "@lib/constants.color";
 import {
   generateColorSpaceGeometry,
@@ -12,11 +12,6 @@ const mongoClientOptions: MongoClientOptions = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 };
-
-const defaultColorSpace: ColorSpace = ColorSpace.sRGB;
-const defaultReferenceModel: ColorModel = ColorModel.XYZ;
-const defaultReferenceIlluminant: Illuminant =
-  colorSpaceMap.get(ColorSpace.sRGB)?.illuminant || Illuminant.D50;
 
 async function getMongoCollection(
   dbUrl: string,
@@ -43,13 +38,11 @@ async function getMongoCollection(
 }
 
 // cache RGB color space mesh data if it does not already exist
-export async function storeGeneratedMeshData(dbUrl: string, dbName: string) {
-  // maximum number of vertex for each face row
-  const maxDivisions = Math.pow(2, 8);
-
-  // name of collection within MongoDB
-  const collectionName: string = "vertices";
-
+export async function storeGeneratedMeshData(
+  dbUrl: string,
+  dbName: string,
+  collectionName: string
+) {
   // create instance to mongo client with url
   const { client, collection } = await getMongoCollection(
     dbUrl,
@@ -62,12 +55,27 @@ export async function storeGeneratedMeshData(dbUrl: string, dbName: string) {
 
   // update document or insert if it doesnt exist
   if (!document) {
+    // maximum number of vertex for each face row
+    const maxDivisions: number = FidelityLevels.high;
+
+    // get default info to store with the reference vertices
+    const defaultColorSpace: ColorSpace = ColorSpace.sRGB;
+    const defaultReferenceModel: ColorModel = ColorModel.XYZ;
+    const defaultReferenceIlluminant: Illuminant =
+      colorSpaceMap.get(ColorSpace.sRGB)?.illuminant || Illuminant.D50;
+
+    // build document properties object to include with vertices
+    const documentFields: any = {
+      divisions: maxDivisions,
+      referenceIlluminant: defaultReferenceIlluminant,
+      referenceSpace: defaultReferenceModel,
+      sourceSpace: defaultColorSpace,
+    };
+
+    // attempt to push the document into the collection
     try {
       await collection.insertOne({
-        divisions: maxDivisions,
-        referenceIlluminant: defaultReferenceIlluminant,
-        referenceSpace: defaultReferenceModel,
-        sourceSpace: defaultColorSpace,
+        ...documentFields,
         vertices: generateColorSpaceGeometry(maxDivisions),
       });
     } catch (error) {
@@ -127,9 +135,10 @@ export async function getVertexDataFor(
     // return stringified result from MongoDB
     return JSON.stringify(document.vertexData);
   } else {
-    console.log('no records found, creating new record');
+    console.log("no records found, creating new record");
+
     // grab the collection holding vertices data
-    collection = db.collection("vertices");
+    collection = db.collection("reference-vertices");
 
     // find the collection with the matched number of divisions
     document = await collection.findOne({
@@ -154,7 +163,7 @@ export async function getVertexDataFor(
 
     // given this is new, store this derived data as a record in the data base.
     // this saves on subsequent calculation costs for other hits to the server.
-    storeVertexDataAsRecord(dbUrl, dbName, {
+    storeVertexDataAsRecord(dbUrl, dbName, "positions", {
       vertexData,
       fidelity,
       sourceSpace,
@@ -173,9 +182,10 @@ export async function getVertexDataFor(
 async function storeVertexDataAsRecord(
   dbUrl: string,
   dbName: string,
+  collectionName: string,
   recordData: VertexDataFields
 ) {
-  const { collection } = await getMongoCollection(dbUrl, dbName, "vertexData");
+  const { collection } = await getMongoCollection(dbUrl, dbName, collectionName);
 
   await collection.insertOne(recordData);
 }
@@ -194,4 +204,18 @@ export async function clearAllRecordsFromCollection(
   );
 
   collection.deleteMany({});
+}
+
+export async function storeMeshDataToDb(
+  vertices: number[][][],
+  dbUrl: string,
+  dbName: string
+) {
+  const collectionName: string = "mesh-data";
+
+  const { collection } = await getMongoCollection(
+    dbUrl,
+    dbName,
+    collectionName
+  );
 }

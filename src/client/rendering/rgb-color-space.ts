@@ -2,7 +2,7 @@ import * as Babylon from "babylonjs";
 import { sceneEntityNames } from "@res/rendering-constants";
 
 const meshDiffuseOpacity: number = 1;
-const wireframeDiffuseOpacity: number = 0.2;
+const wireframeDiffuseOpacity: number = 0.12;
 
 // Render profile color space in XYZ space
 export function renderColorSpace(

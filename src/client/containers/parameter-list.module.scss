@@ -7,7 +7,7 @@
 
 .control {
 	flex-grow: 1;
-	margin-bottom: 1rem;
+	margin-bottom: 1.25rem;
 	width: 100%;
 }
 
@@ -21,4 +21,5 @@
 	padding-top: 0;
 	text-transform: capitalize;
 	font-weight: 700;
+	display: none;
 }

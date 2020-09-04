@@ -3,7 +3,6 @@ import * as Babylon from "babylonjs";
 import styles from "./color-space.module.scss";
 import { Graph3d } from "@components/graph-3d";
 import { GraphType } from "@lib/enums";
-import { ColorComponent } from "@components/color-component-input";
 import { renderHemiLight } from "@rendering/lights";
 import { renderColorSpace } from "@rendering/rgb-color-space";
 import { renderColorIndicator } from "@rendering/color-indicator";
@@ -12,6 +11,7 @@ import { colorModelMap } from "@lib/constants.color";
 import { axisOptionsMap } from "@lib/constants.axes";
 import { StoreContext } from "@hooks/store-context";
 import { AxisRenderOptions } from "@client/rendering/axes";
+import { renderFloor } from "@rendering/floor";
 
 interface RgbVisualizationProps {
   geometry: Babylon.VertexData | undefined;
@@ -55,6 +55,17 @@ export function RGBVisualization({ geometry }: RgbVisualizationProps) {
   const handleBlueComponentChange = useCallback((value: number) => {
     setBlueComponent(value / 255);
   }, []);
+
+  const renderFloorMesh = useCallback(
+    (scene: Babylon.Scene) => {
+      const graphType: GraphType | undefined = colorModelMap.get(
+        targetColorModel
+      )?.graphType;
+
+      if (graphType) renderFloor(graphType, scene);
+    },
+    [geometry]
+  );
 
   // render a single point as a sphere within the visualization
   const renderPointMesh = useCallback(
@@ -112,7 +123,12 @@ export function RGBVisualization({ geometry }: RgbVisualizationProps) {
       <Graph3d
         axisOptions={useAxisOptions}
         className={styles.graph}
-        renderMethods={[renderHemiLight, renderMesh, renderPointMesh]}
+        renderMethods={[
+          renderHemiLight,
+          renderMesh,
+          renderPointMesh,
+          renderFloorMesh,
+        ]}
       ></Graph3d>
       {/*
       <ColorComponent

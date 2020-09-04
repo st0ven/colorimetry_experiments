@@ -38,7 +38,6 @@ export function storeReducer(
     case "setTargetColorModel":
       return Object.assign({}, store, { targetColorModel: value });
     case "setWaiting":
-      console.log("set wait", value);
       return Object.assign({}, store, { waiting: value });
     case "setWhitepoint":
       return Object.assign({}, store, { whitepoint: value });

@@ -6,71 +6,87 @@ import {
   storeGeneratedMeshData,
   getVertexDataFor,
   VertexDataFields,
-  clearAllRecordsFromCollection
+  clearAllRecordsFromCollection,
 } from "../src/lib/mongo-query";
 
-if (!process.env.MONGODB_NAME) {
-  console.warn(`Warning: No MongoDB name was found as an environment variable`);
-}
-
+// allow environment variable access
 dotenv.config();
 
+// create Express app instance and define a local port
 const app: Express = express();
 const port: number = (process.env.PROXY || 3009) as number;
 
+// local URL info for MongoDB
 const dbNamespace: string = `color-space-mesh`;
 const dbUrl: string = `mongodb://localhost:27017/${dbNamespace}`;
 const dbName: string = process.env.MONGODB_NAME as string;
 
-// initially cache some source geometry data if none exists
-// situation should arise on initial spin up of server
-storeGeneratedMeshData(dbUrl, dbName);
-clearAllRecordsFromCollection(dbUrl, dbName, "vertexData");
+// MongoDb Atlast URL
+const atlasUrl: string = `mongodb+srv://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PWORD}@mephisto.y8d8h.gcp.mongodb.net/${process.env.MONGODB_NAME}?retryWrites=true&w=majority`;
 
-app.use(bodyParser.json());
+// use this db reference
+const useUrl: string = dbUrl;
 
-app.use(bodyParser.urlencoded({ extended: true }));
+// kick off server under async function to allow for awaiting MongoDB functions
+(async function initServer() {
+  const sourceMeshCollectionName: string = "reference-vertices";
+  // initially cache some source geometry data if none exists
+  // situation should arise on initial spin up of server
+  await storeGeneratedMeshData(useUrl, dbName, sourceMeshCollectionName);
 
-app.get("/data/color-space/vertices", async (request, res) => {
-  //set hard cap on max number of divisions
-  const maxDivisions: number = 64;
+  // clear out existing records on initial startup
+  await clearAllRecordsFromCollection(useUrl, dbName, "vertexData");
+  await clearAllRecordsFromCollection(useUrl, dbName, "vertices");
 
-  // pull divisions query from request
-  let {
-    divisions = 16,
-    cspace = ColorSpace.sRGB,
-    fspace = ColorModel.RGB,
-    tspace = ColorModel.XYZ,
-    wp = Illuminant.D50,
-  }: any = request.query;
+  app.use(bodyParser.json());
 
-  // queries will always be extrated as astrings. convert to numeric type
-  divisions = parseInt(divisions);
+  app.use(bodyParser.urlencoded({ extended: true }));
 
-  // ensure this divisions query is bounded
-  divisions = divisions > maxDivisions ? maxDivisions : divisions;
+  app.get("/data/color-space/vertices", async (request, res) => {
+    //set hard cap on max number of divisions
+    const maxDivisions: number = 64;
 
-  const options: VertexDataFields = {
-    fidelity: divisions,
-    sourceSpace: cspace,
-    sourceModel: fspace,
-    referenceModel: tspace,
-    referenceIlluminant: wp,
-  } as VertexDataFields;
+    // pull divisions query from request
+    let {
+      divisions = 16,
+      cspace = ColorSpace.sRGB,
+      fspace = ColorModel.RGB,
+      tspace = ColorModel.XYZ,
+      wp = Illuminant.D50,
+    }: any = request.query;
 
-  // gather trimmed document data points
-  const trimmedDocument: any = await getVertexDataFor(dbUrl, dbName, options);
+    // queries will always be extrated as astrings. convert to numeric type
+    divisions = parseInt(divisions);
 
-  // send back the response of the matching document
-  res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
-  res.send(JSON.stringify(trimmedDocument));
-});
+    // ensure this divisions query is bounded
+    divisions = divisions > maxDivisions ? maxDivisions : divisions;
 
-app.get("/data/color-space/colors", async (request, response) => {
-  try {
-  } catch (error) {
-    response.send(error);
-  }
-});
+    const options: VertexDataFields = {
+      fidelity: divisions,
+      sourceSpace: cspace,
+      sourceModel: fspace,
+      referenceModel: tspace,
+      referenceIlluminant: wp,
+    } as VertexDataFields;
 
-app.listen(port);
+    // gather trimmed document data points
+    const trimmedDocument: any = await getVertexDataFor(
+      useUrl,
+      dbName,
+      options
+    );
+
+    // send back the response of the matching document
+    res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    res.send(JSON.stringify(trimmedDocument));
+  });
+
+  app.get("/data/color-space/colors", async (request, response) => {
+    try {
+    } catch (error) {
+      response.send(error);
+    }
+  });
+
+  app.listen(port);
+})();

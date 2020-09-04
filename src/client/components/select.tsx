@@ -1,6 +1,6 @@
 import React from "react";
 import cx from "classnames";
-import styles from "./select.module.scss";
+import styles from "./inputs.module.scss";
 
 interface SelectProps {
   children: React.ReactElement | React.ReactElement[] | React.ReactChildren;
@@ -26,10 +26,10 @@ export function Select({
   onChange,
 }: SelectProps) {
   // construct wrapper classname
-  const selectCx: string = cx(styles.select, {
+  const selectCx: string = cx(styles.inputGroup, {
     [className]: Boolean(className),
   });
-  
+
   // classname for informative text
   const infoCx: string = cx(styles.info, {
     disabled: Boolean(infoText)
@@ -37,7 +37,7 @@ export function Select({
 
   // render component
   return (
-    <aside className={selectCx}>
+    <section className={selectCx}>
       {label ? (
         <label className={styles.label} htmlFor={id}>
           {label}
@@ -53,7 +53,7 @@ export function Select({
       >
         {children}
       </select>
-      <span className={infoCx}>{infoText}</span>
-    </aside>
+      <small>{infoText}</small>
+    </section>
   );
 }

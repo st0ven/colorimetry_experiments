@@ -1,7 +1,8 @@
-import React, { useCallback, useContext, ChangeEvent } from "react";
+import React, { useCallback, useContext } from "react";
 import { Select } from "@components/select";
 import styles from "./parameter-list.module.scss";
-import { FieldSet, Field } from "@components/option-group";
+import { FieldSet, Field } from "@components/option-list";
+import { FidelityLevels } from "@lib/enums";
 import {
   ColorModelOptions,
   ColorSpaceOptions,
@@ -12,14 +13,6 @@ import {
   StoreContext,
   initialStore,
 } from "@hooks/store-context";
-
-// a collection of mesh fidelity options defined as the number of vertices to
-// create for any given cube fase of the reference vertex data.
-const fidelityOptions: any = {
-  low: Math.pow(2, 3),
-  med: Math.pow(2, 4),
-  high: Math.pow(2, 5),
-};
 
 // component
 export function ParameterList() {
@@ -91,20 +84,6 @@ export function ParameterList() {
         >
           <IlluminantOptions />
         </Select>
-        {/*<Select
-          className={styles.control}
-          onChange={parameterChangeHandler}
-          id="mesh fidelity"
-          action="setFidelity"
-          label="Fidelity"
-          infoText="precision of the mesh representing the color space"
-          initialValue={fidelity}
-          disabled={waiting}
-        >
-          <option value={fidelityOptions.low}>low</option>
-          <option value={fidelityOptions.med}>medium</option>
-          <option value={fidelityOptions.high}>high</option>
-        </Select>*/}
         <FieldSet
           action="setFidelity"
           id="mesh fidelity options"
@@ -114,13 +93,13 @@ export function ParameterList() {
           disabled={waiting}
           onChange={parameterChangeHandler}
         >
-          <Field type="radio" value={fidelityOptions.low} defaultChecked={true}>
+          <Field type="radio" value={FidelityLevels.low} defaultChecked={true}>
             low
           </Field>
-          <Field type="radio" value={fidelityOptions.med}>
+          <Field type="radio" value={FidelityLevels.medium}>
             medium
           </Field>
-          <Field type="radio" value={fidelityOptions.high}>
+          <Field type="radio" value={FidelityLevels.high}>
             high
           </Field>
         </FieldSet>

@@ -7,7 +7,7 @@ import {
   deriveChromaticAdaptationMatrixFor,
   deriveRgbTransformationMatrixFor,
 } from "./transform.colors";
-import { VertexData, Axis } from "babylonjs";
+import { VertexData, Axis, Color3 } from "babylonjs";
 import { flatten } from "./transform.matrices";
 
 // Generate a matrix of vertices representing a plane with a fixed component c.
@@ -76,7 +76,9 @@ export function getColorFromVertex(
   referenceIlluminant: Illuminant = Illuminant.D65
 ): number[] {
   return Transform(ColorModel.RGB)
-    .to(ColorModel.XYZ)(vertex, sourceColorSpace, referenceIlluminant)
+    .to(ColorModel.XYZ)(vertex, sourceColorSpace, referenceIlluminant, {
+      compand: true,
+    })
     .concat([1]);
 }
 
@@ -112,9 +114,8 @@ export function getPositionFromVertex(
   )?.illuminant;
 
   // grab a reference to any axis order mappings associated with the target color model
-  const alignmentOrder: number[] | undefined = colorModelMap.get(
-    targetColorModel
-  )?.axisOrder;
+  const axesOrdering: number[] | undefined = colorModelMap.get(targetColorModel)
+    ?.axisOrder;
 
   // base set of transformation arguments used across most methods
   const commonTransformationArgs: any[] = [
@@ -143,27 +144,27 @@ export function getPositionFromVertex(
 
   // transform the vertex based on the source and target color models
   // with applicable method arguments
-  const transformedColor: number[] = Transform(sourceColorModel).to(
+  const transformedVertex: number[] = Transform(sourceColorModel).to(
     targetColorModel
   )(...transformationArgs);
 
   // normalize the color
   const normalizedColor: number[] = normalizeAnyColor(
-    transformedColor,
+    transformedVertex,
     targetColorModel
   );
 
   // some color spaces need their components re-arranged in order to map to proper X,Y,Z axes in 3d space.
   // this is determined by color model options which represent an array of component order of arrangement.
-  const alignedColor: number[] = alignmentOrder
-    ? alignmentOrder.map((index: number) => normalizedColor[index])
+  const rearrangedVertex: number[] = axesOrdering
+    ? axesOrdering.map((index: number) => normalizedColor[index])
     : normalizedColor;
 
   // if this is a polar coordinate system, further transform the vertex point
   const mappedVertex: number[] =
     colorModelMap.get(targetColorModel)?.graphType === GraphType.cylindrical
-      ? getPolarCoordinatesFor(alignedColor)
-      : alignedColor;
+      ? getPolarCoordinatesFor(rearrangedVertex)
+      : rearrangedVertex;
 
   return mappedVertex;
 }
@@ -177,31 +178,31 @@ export function getTransformedVertexDataFromGeometry(
   toColorModel: ColorModel,
   referenceIlluminant: Illuminant
 ): VertexData {
+  // create lists which will store our vertex data points
   const positions: number[][] = [];
   const facets: number[][] = [];
   const colors: number[][] = [];
 
+  // loop through supplied geometry to build vertex data from the reference points
   for (let i: number = 0; i < geometry.length; i++) {
     for (let j: number = 0; j < geometry[i].length; j++) {
-      const vertex: number[] = geometry[i][j];
+      const rgbVertex: number[] = expandRgbColor(geometry[i][j]);
       const pathLength: number = Math.sqrt(geometry[i].length);
 
-      const position: number[] = getPositionFromVertex(
-        expandRgbColor(vertex),
-        fromColorSpace,
-        fromColorModel,
-        toColorModel,
-        referenceIlluminant
-      );
-
-      positions.push(position);
-
-      colors.push(
-        getColorFromVertex(
-          expandRgbColor(vertex),
+      // calculate position in 3d space based on parameters and add to the positions list
+      positions.push(
+        getPositionFromVertex(
+          rgbVertex,
           fromColorSpace,
+          fromColorModel,
+          toColorModel,
           referenceIlluminant
         )
+      );
+
+      // add this color to the list of colors to be included in the vertexData instance
+      colors.push(
+        getColorFromVertex(rgbVertex, fromColorSpace, referenceIlluminant)
       );
 
       // calculate indices algorithmically and push to list
@@ -213,7 +214,10 @@ export function getTransformedVertexDataFromGeometry(
     }
   }
 
+  // initialize new vertex data object from babylon
   const vertexData: VertexData = new VertexData();
+
+  // assign required parameters to a flattened version of each representative list.
   vertexData.positions = flatten(positions);
   vertexData.indices = flatten(facets);
   vertexData.colors = flatten(colors);
@@ -258,7 +262,11 @@ export function trimGeometry(
 
   // otherwise proceed to trim data
   else {
-    return trimGeometryByDivisionsAlgo(vertices, divisions);
+    return sourceLength > divisions - 1
+      // trim only if the source length is greater than the number of divisions
+      ? trimGeometryByDivisionsAlgo(vertices, divisions)
+      // otherwise return the untrimmed vertices
+      : vertices;
   }
 }
 

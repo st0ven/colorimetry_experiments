@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import cx from "classnames";
-import styles from "./option-group.module.scss";
+import styles from "./option-list.module.scss";
+import inputStyles from "./inputs.module.scss";
 
 interface OptionsGroupProps {
   children: React.ReactElement | React.ReactElement[];
@@ -40,14 +41,13 @@ export function FieldSet({
   }, []);
 
   // build group classname
-  const groupCx: string = cx(styles.group, {
+  const groupCx: string = cx(inputStyles.inputGroup, {
     [`${className}`]: Boolean(className),
   });
 
   const fields: React.ReactElement[] = React.Children.map(
     children as React.ReactElement[],
     (child: React.ReactElement): React.ReactElement => {
-      console.log(child.props.value, currentValue);
       const childValue: string = String(child.props.value);
 
       return React.cloneElement(child, {
@@ -64,13 +64,13 @@ export function FieldSet({
   );
 
   return (
-    <div className={groupCx}>
-      <legend className={styles.label}>{label}</legend>
+    <section className={groupCx}>
+      <legend className={inputStyles.label}>{label}</legend>
       <fieldset id={id} ref={fieldsetRef} data-action={action}>
         {fields}
       </fieldset>
-      <span className={styles.info}>{infoText}</span>
-    </div>
+      <small>{infoText}</small>
+    </section>
   );
 }
 
@@ -104,7 +104,7 @@ export function Field({
   );
 
   return (
-    <div className={wrapperCx} onClick={clickHandler}>
+    <section className={wrapperCx} onClick={clickHandler}>
       <input
         data-action={action}
         ref={inputRef}
@@ -113,8 +113,8 @@ export function Field({
         type={type}
         value={String(value)}
       ></input>
-      <button className={styles.button}></button>
-      <label className={styles.inputLabel}>{children}</label>
-    </div>
+      <button></button>
+      <label>{children}</label>
+    </section>
   );
 }

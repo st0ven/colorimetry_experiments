@@ -3,7 +3,6 @@ import cx from "classnames";
 import styles from "./graph-3d.module.scss";
 import * as Babylon from "babylonjs";
 import { AxisRenderOptions, renderAxes } from "@rendering/axes";
-import { adjustCameraTarget } from "@rendering/camera";
 
 const canvasBackgroundColor: Babylon.Color4 = new Babylon.Color4(
   0.06,

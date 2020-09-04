@@ -35,6 +35,14 @@ export enum CompandMethod {
   lStar = "lStar",
 }
 
+// a collection of mesh fidelity options defined as the number of vertices to
+// create for any given cube fase of the reference vertex data.
+export enum FidelityLevels {
+  low = Math.pow(2, 3),
+  medium = Math.pow(2, 4),
+  high = Math.pow(2, 5),
+}
+
 export enum GraphType {
   box = "box",
   cylindrical = "cylindrical",
