@@ -1,9 +1,4 @@
-import {
-  ColorModel,
-  ColorSpace,
-  GraphType,
-  Illuminant,
-} from "@lib/enums";
+import { ColorModel, ColorSpace, GraphType, Illuminant } from "@lib/enums";
 
 // chromatic adatpation matricies
 export const adaptations = {
@@ -63,11 +58,11 @@ export const colorModelMap: Map<ColorModel, ColorModelMapItem> = new Map([
         useAbsoluteValues: true,
       },
       range: [
-        [0,100],
-        [0,200],
-        [0,360]
-      ]
-    }
+        [0, 100],
+        [0, 200],
+        [0, 360],
+      ],
+    },
   ],
   [
     ColorModel.LCHuv,
@@ -109,6 +104,17 @@ export const colorModelMap: Map<ColorModel, ColorModelMapItem> = new Map([
   ],
   [
     ColorModel.XYZ,
+    {
+      graphType: GraphType.box,
+      range: [
+        [0, 1],
+        [0, 1],
+        [0, 1],
+      ],
+    },
+  ],
+  [
+    ColorModel.xyY,
     {
       graphType: GraphType.box,
       range: [

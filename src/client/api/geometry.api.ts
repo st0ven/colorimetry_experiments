@@ -25,6 +25,7 @@ export async function fetchColorSpaceGeometry(
 
   if (response.status === 200) {
     const body: any = JSON.parse(await response.json());
+    console.log(body);
     const data: VertexData = new VertexData();
     return Object.assign(data, body);
   } else {

@@ -171,58 +171,127 @@ export function getPositionFromVertex(
 
 // given a geometry matrix of positions, return calculated VertexData to render the
 // geometry within Babylon.js. Ultimately maps positions, facets and colors for each vertex.
-export function getTransformedVertexDataFromGeometry(
+export function getTransformedGeometryFrom(
+  geometry: number[][][],
+  fromColorSpace: ColorSpace,
+  fromColorModel: ColorModel,
+  toColorModel: ColorModel,
+  referenceIlluminant: Illuminant,
+  { colors = [], facets = [], positions = [] }: any = {}
+): { colors: number[][]; facets: number[][]; positions: number[][] } {
+  // create lists which will store our vertex data points
+  // const positions: number[][] = [];
+  // const facets: number[][] = [];
+  // const colors: number[][] = [];
+  const includeColors: boolean = !colors.length;
+  const includeFacets: boolean = !facets.length;
+  const includePositions: boolean = !positions.length;
+
+  // only loop through if there is something that needs construction. this is determined
+  // by deducing if either colors, facets or positions is missing from parameter details
+  if (includeColors || includeFacets || includePositions) {
+    // loop through supplied geometry to build vertex data from the reference points
+    for (let i: number = 0; i < geometry.length; i++) {
+      for (let j: number = 0; j < geometry[i].length; j++) {
+        const rgbVertex: number[] = expandRgbColor(geometry[i][j]);
+        const pathLength: number = Math.sqrt(geometry[i].length);
+
+        // calculate position in 3d space based on parameters and add to the positions list
+        if (includePositions) {
+          positions.push(
+            getPositionFromVertex(
+              rgbVertex,
+              fromColorSpace,
+              fromColorModel,
+              toColorModel,
+              referenceIlluminant
+            )
+          );
+        }
+
+        // add this color to the list of colors to be included in the vertexData instance
+        if (includeColors) {
+          colors.push(
+            getColorFromVertex(rgbVertex, fromColorSpace, referenceIlluminant)
+          );
+        }
+
+        if (includeFacets) {
+          // calculate indices algorithmically and push to list
+          if (geometry[i][j + pathLength] && j % pathLength < pathLength - 1) {
+            facets.push(
+              getFacetsFromVertex(i * geometry[i].length + j, pathLength)
+            );
+          }
+        }
+      }
+    }
+  }
+
+  console.log(colors.length, facets.length, positions.length, facets[29]);
+  return { colors, facets, positions };
+}
+
+export function getTransformedColors(
+  forGeometry: number[][][],
+  fromColorSpace: ColorSpace,
+  referenceIlluminant: Illuminant
+): number[][][] {
+  return forGeometry.map((face: number[][]) =>
+    face.map((vertex: number[]) =>
+      // calculate position in 3d space based on parameters and add to the positions list
+      getColorFromVertex(
+        expandRgbColor(vertex),
+        fromColorSpace,
+        referenceIlluminant
+      )
+    )
+  );
+}
+
+export function getTransformedFacets(divisions: number): number[][][] {
+  const transformedFacets: number[][][] = [];
+  const vertexCountPerFace: number = Math.pow(divisions + 1, 2);
+
+  for (let i: number = 0; i < 6; i++) {
+    const faceFacets: number[][] = [];
+
+    for (let j: number = 0; j < vertexCountPerFace - divisions - 1; j++) {
+      const colIndex: number = Math.floor(j / divisions);
+      const rowEndIndex: number = divisions * colIndex + (colIndex - 1);
+
+      if (j !== rowEndIndex) {
+        faceFacets.push(
+          getFacetsFromVertex(i * vertexCountPerFace + j, divisions + 1)
+        );
+      }
+    }
+
+    transformedFacets.push(faceFacets);
+  }
+
+  return transformedFacets;
+}
+
+export function getTransformedPositions(
   geometry: number[][][],
   fromColorSpace: ColorSpace,
   fromColorModel: ColorModel,
   toColorModel: ColorModel,
   referenceIlluminant: Illuminant
-): VertexData {
-  // create lists which will store our vertex data points
-  const positions: number[][] = [];
-  const facets: number[][] = [];
-  const colors: number[][] = [];
-
-  // loop through supplied geometry to build vertex data from the reference points
-  for (let i: number = 0; i < geometry.length; i++) {
-    for (let j: number = 0; j < geometry[i].length; j++) {
-      const rgbVertex: number[] = expandRgbColor(geometry[i][j]);
-      const pathLength: number = Math.sqrt(geometry[i].length);
-
+): number[][][] {
+  return geometry.map((face: number[][]) =>
+    face.map((vertex: number[]) =>
       // calculate position in 3d space based on parameters and add to the positions list
-      positions.push(
-        getPositionFromVertex(
-          rgbVertex,
-          fromColorSpace,
-          fromColorModel,
-          toColorModel,
-          referenceIlluminant
-        )
-      );
-
-      // add this color to the list of colors to be included in the vertexData instance
-      colors.push(
-        getColorFromVertex(rgbVertex, fromColorSpace, referenceIlluminant)
-      );
-
-      // calculate indices algorithmically and push to list
-      if (geometry[i][j + pathLength] && j % pathLength < pathLength - 1) {
-        facets.push(
-          getFacetsFromVertex(i * geometry[i].length + j, pathLength)
-        );
-      }
-    }
-  }
-
-  // initialize new vertex data object from babylon
-  const vertexData: VertexData = new VertexData();
-
-  // assign required parameters to a flattened version of each representative list.
-  vertexData.positions = flatten(positions);
-  vertexData.indices = flatten(facets);
-  vertexData.colors = flatten(colors);
-
-  return vertexData;
+      getPositionFromVertex(
+        expandRgbColor(vertex),
+        fromColorSpace,
+        fromColorModel,
+        toColorModel,
+        referenceIlluminant
+      )
+    )
+  );
 }
 
 // takes an LCHuv color that has been normalized to a 0-1 range and
@@ -263,16 +332,16 @@ export function trimGeometry(
   // otherwise proceed to trim data
   else {
     return sourceLength > divisions - 1
-      // trim only if the source length is greater than the number of divisions
-      ? trimGeometryByDivisionsAlgo(vertices, divisions)
-      // otherwise return the untrimmed vertices
-      : vertices;
+      ? // trim only if the source length is greater than the number of divisions
+        trimGeometryByDivisionsAlgo(vertices, divisions)
+      : // otherwise return the untrimmed vertices
+        vertices;
   }
 }
 
 // algorithm which trims out the vectors from an array of  planar matrices of vectors
 // at set intervals as defined by how many divisions the resulting mesh should contain.
-function trimGeometryByDivisionsAlgo(
+export function trimGeometryByDivisionsAlgo(
   // the original set of vertices to trim
   geometry: number[][][],
   // the resulting number of dimensions a planar matrix should contain
@@ -335,4 +404,34 @@ function trimGeometryByDivisionsAlgo(
     trimmedGeometry.push(trimmedPlane);
   }
   return trimmedGeometry;
+}
+
+export function trimPositions(
+  positions: number[][],
+  divisions: number
+): number[][] {
+  const trimmedPositions: number[][] = [];
+
+  // the number of vertices which makes up a planar axis
+  const planarLength: number = Math.sqrt(positions.length / 6);
+
+  const iterations = Math.pow(divisions, 2) * 6;
+
+  for (let i: number = 0; i < iterations; i++) {
+    const rowIndex: number = i % divisions;
+
+    const colIndex: number =
+      Math.floor(divisions / planarLength) * Math.floor(i / divisions);
+
+    const offsetIndex: number = colIndex * planarLength + rowIndex;
+
+    // set a reference to the vector within the source planar matrix
+    /*const vertex: number[] = positions[offsetIndex].map((component: number) =>
+      parseFloat(component.toFixed(4))
+    );*/
+    const vertex: number[] = positions[offsetIndex];
+
+    trimmedPositions.push(vertex);
+  }
+  return trimmedPositions;
 }

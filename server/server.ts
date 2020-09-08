@@ -4,10 +4,11 @@ import * as dotenv from "dotenv";
 import { ColorSpace, Illuminant, ColorModel } from "@lib/enums";
 import {
   storeGeneratedMeshData,
-  getVertexDataFor,
   VertexDataFields,
   clearAllRecordsFromCollection,
+  getMeshDataFor,
 } from "../src/lib/mongo-query";
+import { VertexData } from "babylonjs";
 
 // allow environment variable access
 dotenv.config();
@@ -30,13 +31,18 @@ const useUrl: string = dbUrl;
 // kick off server under async function to allow for awaiting MongoDB functions
 (async function initServer() {
   const sourceMeshCollectionName: string = "reference-vertices";
+
+  // clear out existing records on initial startup
+  //await clearAllRecordsFromCollection(useUrl, dbName, sourceMeshCollectionName);
+  await clearAllRecordsFromCollection(useUrl, dbName, "vertexData");
+  await clearAllRecordsFromCollection(useUrl, dbName, "vertices");
+  await clearAllRecordsFromCollection(useUrl, dbName, "colors");
+  await clearAllRecordsFromCollection(useUrl, dbName, "facets");
+  await clearAllRecordsFromCollection(useUrl, dbName, "positions");
+
   // initially cache some source geometry data if none exists
   // situation should arise on initial spin up of server
   await storeGeneratedMeshData(useUrl, dbName, sourceMeshCollectionName);
-
-  // clear out existing records on initial startup
-  await clearAllRecordsFromCollection(useUrl, dbName, "vertexData");
-  await clearAllRecordsFromCollection(useUrl, dbName, "vertices");
 
   app.use(bodyParser.json());
 
@@ -70,15 +76,17 @@ const useUrl: string = dbUrl;
     } as VertexDataFields;
 
     // gather trimmed document data points
-    const trimmedDocument: any = await getVertexDataFor(
+    const payload: string = await getMeshDataFor(
       useUrl,
       dbName,
       options
     );
 
+    //const trimmedDoc: any = await ge
+
     // send back the response of the matching document
     res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
-    res.send(JSON.stringify(trimmedDocument));
+    res.send(JSON.stringify(payload));
   });
 
   app.get("/data/color-space/colors", async (request, response) => {

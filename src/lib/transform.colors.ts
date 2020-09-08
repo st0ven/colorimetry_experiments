@@ -1,5 +1,9 @@
 import { CompandMethod, ColorSpace, ColorModel, Illuminant } from "@lib/enums";
-import { invertMatrix, matrixMultiply, rotateMatrix } from "./transform.matrices";
+import {
+  invertMatrix,
+  matrixMultiply,
+  rotateMatrix,
+} from "./transform.matrices";
 import {
   illuminantMap,
   colorSpaceMap,
@@ -24,6 +28,7 @@ const transformMap: any = {
     [ColorModel.LUV]: transform_RGB_to_LUV,
     [ColorModel.LCHab]: transform_RGB_to_LCHab,
     [ColorModel.LCHuv]: transform_RGB_to_LCHuv,
+    [ColorModel.RGB]: (n: any) => n,
     [ColorModel.XYZ]: transform_RGB_to_XYZ,
     [ColorModel.xyY]: transform_RGB_to_xyY,
   },
