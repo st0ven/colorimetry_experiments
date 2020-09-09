@@ -315,27 +315,27 @@ export function getPolarCoordinatesFor(colorNormalized: number[]): number[] {
 // receive a number representing how many divisions to extract from
 // the source collection. Returns a new, trimmed copy of the source.
 export function trimGeometry(
-  vertices: number[][][],
+  fromGeometry: number[][][],
   divisions: number
 ): number[][][] {
   // an alias representing the length of vertices within a single face of the geometry
-  const sourceLength: number = vertices[0].length;
+  const sourceLength: number = fromGeometry[0].length;
 
   // if the number of vertices is less than the division count, return the original data
   if (sourceLength < divisions - 1) {
     console.warn(
       `Attempted to trim vertices with division count of ${divisions}, but the source only had ${sourceLength} number of entries`
     );
-    return vertices;
+    return fromGeometry;
   }
 
   // otherwise proceed to trim data
   else {
     return sourceLength > divisions - 1
       ? // trim only if the source length is greater than the number of divisions
-        trimGeometryByDivisionsAlgo(vertices, divisions)
+        trimGeometryByDivisionsAlgo(fromGeometry, divisions)
       : // otherwise return the untrimmed vertices
-        vertices;
+        fromGeometry;
   }
 }
 
@@ -403,35 +403,6 @@ export function trimGeometryByDivisionsAlgo(
     // add trimmed plane to trimmed geometry
     trimmedGeometry.push(trimmedPlane);
   }
+
   return trimmedGeometry;
-}
-
-export function trimPositions(
-  positions: number[][],
-  divisions: number
-): number[][] {
-  const trimmedPositions: number[][] = [];
-
-  // the number of vertices which makes up a planar axis
-  const planarLength: number = Math.sqrt(positions.length / 6);
-
-  const iterations = Math.pow(divisions, 2) * 6;
-
-  for (let i: number = 0; i < iterations; i++) {
-    const rowIndex: number = i % divisions;
-
-    const colIndex: number =
-      Math.floor(divisions / planarLength) * Math.floor(i / divisions);
-
-    const offsetIndex: number = colIndex * planarLength + rowIndex;
-
-    // set a reference to the vector within the source planar matrix
-    /*const vertex: number[] = positions[offsetIndex].map((component: number) =>
-      parseFloat(component.toFixed(4))
-    );*/
-    const vertex: number[] = positions[offsetIndex];
-
-    trimmedPositions.push(vertex);
-  }
-  return trimmedPositions;
 }

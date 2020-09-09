@@ -76,13 +76,9 @@ const useUrl: string = dbUrl;
     } as VertexDataFields;
 
     // gather trimmed document data points
-    const payload: string = await getMeshDataFor(
-      useUrl,
-      dbName,
-      options
+    const payload: string = JSON.stringify(
+      await getMeshDataFor(useUrl, dbName, options)
     );
-
-    //const trimmedDoc: any = await ge
 
     // send back the response of the matching document
     res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
